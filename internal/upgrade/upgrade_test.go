@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -93,7 +94,8 @@ func TestReplace(t *testing.T) {
 		if b, _ := os.ReadFile(exe); string(b) != "new" {
 			t.Fatalf("windows=%v: %q", windows, b)
 		}
-		if info, _ := os.Stat(exe); info.Mode().Perm()&0o100 == 0 {
+		// Windows has no executable bit.
+		if info, _ := os.Stat(exe); runtime.GOOS != "windows" && info.Mode().Perm()&0o100 == 0 {
 			t.Fatal("stays executable")
 		}
 		Cleanup(exe)
