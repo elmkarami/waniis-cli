@@ -23,6 +23,10 @@ type Console struct {
 	Ed     *Editor
 	Bold   func(string) string // styling for the selected menu item; nil: none
 	Dim    func(string) string
+	// Pick, when set, is drawn under the input line instead of the command menu and takes the
+	// keys. Set and clear it with OpenPicker and inside Edit.
+	Pick      *Picker
+	PickStyle PickStyle
 
 	mu      sync.Mutex
 	partial string // the unfinished line of what was written, shown above the status line
@@ -203,7 +207,18 @@ func (c *Console) draw() string {
 	return b.String()
 }
 
+// OpenPicker shows p under the input line; it takes the keys until it is done.
+func (c *Console) OpenPicker(p *Picker) {
+	c.mu.Lock()
+	c.Pick = p
+	c.mu.Unlock()
+	c.Redraw()
+}
+
 func (c *Console) menuLines(w int) []string {
+	if c.Pick != nil {
+		return c.Pick.Lines(w, c.PickStyle)
+	}
 	items := c.Ed.Menu()
 	if len(items) == 0 {
 		return nil

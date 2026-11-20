@@ -37,6 +37,19 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$VERSION" -m "waniis $VERSION"
           git push origin "$VERSION"
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          # The version's section, from its heading to the next one, without the heading.
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            echo "::error::CHANGELOG.md has no section for $VERSION. Add \"## $VERSION — <date>\" first."; exit 1
+          fi
+          cat "$RUNNER_TEMP/notes.md"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -47,7 +60,7 @@ jobs:
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          args: release --clean --release-notes ${{ runner.temp }}/notes.md
         env:
           # Publishes the release and its archives to this repository.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

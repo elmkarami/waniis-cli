@@ -140,7 +140,7 @@ personal token (WANIIS_TOKEN).`,
 	})
 	root.AddCommand(
 		a.loginCmd(), a.logoutCmd(), a.whoamiCmd(),
-		a.sessionsCmd(), a.exportCmd(), a.versionCmd(),
+		a.sessionsCmd(), a.exportCmd(), a.versionCmd(), a.modelsCmd(),
 	)
 	// The most used session commands also at the top level (CLT-15/FR-8).
 	root.AddCommand(

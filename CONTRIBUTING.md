@@ -28,4 +28,12 @@ make build    # ./bin/waniis
 ## Pull requests
 
 Keep them small and focused, with a short description of what changed and why.
+## Releasing
+
+1. Add the version's section to `CHANGELOG.md` (`## v1.2.3 — YYYY-MM-DD`): what people will
+   notice, grouped under Added, Changed and Fixed. It becomes the release notes on GitHub, and
+   the Release workflow refuses a version without one.
+2. Run the **Release** workflow from the Actions tab with the version (`v1.2.3`). It tags the
+   commit, builds every platform, signs, publishes the release and updates the Homebrew tap.
+
 By contributing you agree your work is released under the Apache License 2.0.

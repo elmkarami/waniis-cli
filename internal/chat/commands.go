@@ -30,7 +30,7 @@ var Commands = []Command{
 	{Name: "share", Args: "[viewer|collaborator]", Desc: "Turn on a share link and print it"},
 	{Name: "export", Args: "[csv|xlsx]", Desc: "Save this session's summary row to a file"},
 	{Name: "mode", Args: "auto|build|plan|ask", Desc: "How the next prompts run"},
-	{Name: "model", Args: "<id>", Desc: "Model for the next prompts"},
+	{Name: "model", Args: "[name]", Desc: "Pick the model for the next prompts", Aliases: []string{"models"}},
 	{Name: "attach", Args: "<file>", Desc: "Attach a file to the next prompt"},
 	{Name: "whoami", Desc: "Who you are and where"},
 	{Name: "workspace", Args: "[name]", Desc: "List workspaces, or switch for this chat"},

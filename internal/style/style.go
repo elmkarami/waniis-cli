@@ -24,6 +24,12 @@ func (s Style) Yellow(t string) string  { return s.wrap("33", t) }
 func (s Style) Magenta(t string) string { return s.wrap("35", t) }
 func (s Style) Cyan(t string) string    { return s.wrap("36", t) }
 
+// Reverse swaps the text and background colors: a selected tab.
+func (s Style) Reverse(t string) string { return s.wrap("7", t) }
+
+// Code wraps text in the given SGR codes ("1;36").
+func (s Style) Code(code, t string) string { return s.wrap(code, t) }
+
 // seriesCodes is the fixed order of series colors in charts.
 var seriesCodes = []string{"36", "33", "35", "32"}
 

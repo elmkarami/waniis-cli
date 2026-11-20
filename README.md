@@ -76,6 +76,7 @@ echo "$TOKEN" | waniis login --with-token   # or keep it in the keychain
 | `waniis sessions share <id> ...` | Share links, people, visibility |
 | `waniis sessions open <id>` | Open a session in the browser |
 | `waniis export sessions` | Export sessions to CSV or Excel |
+| `waniis models` | The workspace's models, which ones it can use, and why not (`--configured`, `--not-configured`, `--search`) |
 | `waniis` / `waniis chat [id]` | Interactive chat in the terminal |
 | `waniis mcp` | MCP server over stdio for AI agents |
 | `waniis version` | Version |
@@ -166,6 +167,12 @@ color per series, or a small line plot. `--charts auto|always|never` controls th
 is terminals only); `--json` leaves the chart block as the API sent it. Markdown tables in answers
 become aligned tables too.
 
+**Markdown in answers.** With colors on, answers are styled as they stream: headings, **bold**,
+*italic*, ~~strikethrough~~, `inline code`, links (the address after the text), lists, task boxes,
+quotes and rules. Code blocks are syntax highlighted for the language they name, in your
+terminal's own 16 colors, so a light or dark theme is respected. Without colors (`--no-color`,
+`NO_COLOR`, or output to a pipe or file) answers are printed exactly as written.
+
 ## Appending, steering and waiting
 
 ```sh
@@ -225,9 +232,17 @@ Type **`/`** to open the command menu: it filters as you type, **Up/Down** pick,
 | `/new [prompt]` · `/sessions` · `/switch <id>` | Start a session, pick a recent one by number, follow another |
 | `/status` · `/stop` · `/steer <text>` · `/queue` · `/logs [N]` | Look at and control the session |
 | `/diff` · `/pr` · `/preview` · `/open` · `/share [role]` · `/export [csv\|xlsx]` | Changes, pull request, preview links (one-time, 60 seconds), browser, share link, a file with the session's summary row |
-| `/mode auto\|build\|plan\|ask` · `/model <id>` | How the next prompts run |
+| `/mode auto\|build\|plan\|ask` · `/model [name]` | How the next prompts run, and with which model |
 | `/whoami` · `/workspace [name]` · `/login` · `/logout` | Account. `/login` and `/attach` say they aren't available yet |
 | `/clear` · `/quit` (`/exit`) | Clear the screen, leave |
+
+**Choosing a model.** `/model` (or `/models`) opens a picker under the input line with four tabs:
+**All**, **Configured** (the ones this workspace can use), **Not configured** (no key yet, or not
+allowed, with the reason) and **Search**. **←/→** or **Tab** change the tab, **↑/↓** move, typing
+searches, **Enter** chooses, **Esc** closes. `/model <name>` chooses directly: the full id
+(`anthropic/claude-sonnet-5-5`), the id without the provider, the name, or words that match only
+one model. `/model default` goes back to the workspace's model. Outside the chat, `--model` on
+`new` and `prompt` does the same for one prompt.
 
 When the stream shows something waiting for you, the chat asks inline: `Allow ramp.com (read) for
 this session? [y/N]` for the agent's network requests, `[y] once, [s] session, [N] deny` for tool

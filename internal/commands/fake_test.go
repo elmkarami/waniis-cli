@@ -203,6 +203,8 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case m == "GET" && p == "/v1/me":
 		writeJSON(w, 200, f.me)
+	case m == "GET" && p == "/v1/models":
+		writeJSON(w, 200, fakeModels)
 	case m == "GET" && (p == "/v1/sessions" || p == "/v1/sessions/search"):
 		f.listSessions(w, r, p == "/v1/sessions/search")
 	case m == "POST" && p == "/v1/sessions":
@@ -434,4 +436,19 @@ func (h *harness) runWithHook(hook func(), args ...string) (int, string, string)
 	}
 	code := Execute(context.Background(), d, append([]string{"--api-url", h.f.srv.URL}, args...))
 	return code, out.String(), errb.String()
+}
+
+// fakeModels is a workspace with an Anthropic key and no OpenAI key.
+var fakeModels = map[string]any{
+	"providers": []any{
+		map[string]any{"id": "anthropic", "title": "Anthropic", "managed": false, "key": map[string]any{"last4": "abcd"}},
+		map[string]any{"id": "openai", "title": "OpenAI", "managed": false, "key": nil},
+	},
+	"models": []any{
+		map[string]any{"ref": "anthropic/claude-x", "provider": "anthropic", "title": "Claude X", "tier": "frontier", "available": true},
+		map[string]any{"ref": "anthropic/claude-y", "provider": "anthropic", "title": "Claude Y", "tier": "fast", "available": true},
+		map[string]any{"ref": "openai/gpt-z", "provider": "openai", "title": "GPT Z", "tier": "frontier", "available": false},
+	},
+	"routes":    map[string]any{"agent": map[string]any{"model": "anthropic/claude-x", "fallbacks": []any{}}},
+	"canManage": true,
 }

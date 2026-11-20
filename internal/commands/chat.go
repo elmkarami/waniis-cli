@@ -140,7 +140,8 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 			defer restore()
 		}
 	}
-	s.con = &chat.Console{Out: a.Out, Raw: raw, Width: a.termWidth, Ed: s.ed, Prompt: s.promptText, Bold: sty.Bold, Dim: sty.Dim}
+	s.con = &chat.Console{Out: a.Out, Raw: raw, Width: a.termWidth, Ed: s.ed, Prompt: s.promptText, Bold: sty.Bold, Dim: sty.Dim,
+		PickStyle: chat.PickStyle{Bold: sty.Bold, Dim: sty.Dim, Accent: sty.Cyan, Reverse: sty.Reverse}}
 	ca.Out, ca.Err = s.con, s.con
 	s.a = &ca
 	s.spinner = raw && sty.On
@@ -382,10 +383,25 @@ func (s *chatSession) rawLoop() error {
 				// the console's lock.
 				var res chat.Result
 				var line string
+				var picked func()
 				s.con.Edit(func() {
+					if p := s.con.Pick; p != nil {
+						// An open picker (/model) takes the keys until it is done.
+						if done, item := p.Handle(k); done {
+							s.con.Pick = nil
+							if p.Done != nil {
+								picked = func() { p.Done(item) }
+							}
+						}
+						return
+					}
 					res = s.ed.Handle(k)
 					line = s.ed.Line
 				})
+				if picked != nil {
+					s.con.Redraw()
+					picked()
+				}
 				switch res {
 				case chat.Submit:
 					s.submit(line)
@@ -1066,15 +1082,7 @@ func (s *chatSession) slash(line string) bool {
 		s.mu.Unlock()
 		s.dim("Next prompts run in " + arg + " mode.")
 	case "model":
-		if arg == "" {
-			s.say("Usage: /model <id>")
-			break
-		}
-		s.mu.Lock()
-		s.model = arg
-		s.refreshPrompt()
-		s.mu.Unlock()
-		s.dim("Next prompts use the model " + arg + ".")
+		s.chooseModel(arg)
 	case "attach":
 		s.say("Not available yet: attaching files needs an upload step the CLI doesn't have. Add the file in the web app.")
 	case "whoami":

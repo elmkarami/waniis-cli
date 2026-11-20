@@ -62,8 +62,10 @@ const (
 )
 
 // MD turns streamed Markdown into terminal text: charts become a plot and a table, Markdown
-// tables become aligned tables, everything else passes through. Text can arrive in any chunking;
-// ordinary lines are written as soon as they start, so a streamed answer reads live.
+// tables become aligned tables. With colors on, the rest is styled too: headings, **bold**,
+// *italic*, `code`, links, lists, quotes and rules, and code blocks are syntax highlighted;
+// without colors it passes through as written. Text can arrive in any chunking; ordinary lines
+// are written as soon as their first word is known, so a streamed answer reads live.
 type MD struct {
 	w    io.Writer
 	opts MDOptions
@@ -73,7 +75,12 @@ type MD struct {
 	mode    mdMode
 	held    []string // raw lines of a chart fence or table being collected
 	marker  string   // the open fence's marker
+	started bool     // the current line is being written as it streams
+	inl     inline   // the current line's inline styles
+	hl      *highlighter
 }
+
+func (m *MD) styled() bool { return m.opts.Style.On }
 
 // NewMD writes to w.
 func NewMD(w io.Writer, o MDOptions) *MD { return &MD{w: w, opts: o} }
@@ -102,7 +109,7 @@ func (m *MD) Write(s string) {
 func (m *MD) canStream() bool {
 	switch m.mode {
 	case mdPlainFence:
-		return true
+		return !m.styled()
 	case mdNormal:
 		t := strings.TrimLeft(m.line, " ")
 		return t != "" && !strings.ContainsAny(t[:1], "`~|")
@@ -111,19 +118,33 @@ func (m *MD) canStream() bool {
 }
 
 func (m *MD) stream() {
-	if m.canStream() && m.printed < len(m.line) {
-		m.out(m.line[m.printed:])
-		m.printed = len(m.line)
+	if !m.canStream() || m.printed >= len(m.line) {
+		return
 	}
+	if !m.styled() {
+		m.out(m.line[m.printed:])
+		m.printed, m.started = len(m.line), true
+		return
+	}
+	if !m.started {
+		prefix, skip, ok := m.lineStart(m.line, false)
+		if !ok {
+			return
+		}
+		m.out(prefix)
+		m.printed, m.started = skip, true
+	}
+	m.out(m.inl.feed(m.line[m.printed:], false))
+	m.printed = len(m.line)
 }
 
 func (m *MD) endLine() {
 	line := m.line
-	streamed := m.printed > 0
+	streamed := m.started
 	if streamed {
-		m.out(line[m.printed:] + "\n")
+		m.out(m.finishStreamed(line[m.printed:]) + "\n")
 	}
-	m.line, m.printed = "", 0
+	m.line, m.printed, m.started = "", 0, false
 	if streamed {
 		// A streamed line was ordinary text, or a line inside a plain fence: it can't open or
 		// close anything, except the closing fence of a plain one.
@@ -135,6 +156,14 @@ func (m *MD) endLine() {
 		return
 	}
 	m.process(line)
+}
+
+// finishStreamed is the end of a line that was streamed.
+func (m *MD) finishStreamed(rest string) string {
+	if !m.styled() || m.mode != mdNormal {
+		return rest
+	}
+	return m.inl.feed(rest, true)
 }
 
 func closingFenceLine(line string) (string, bool) {
@@ -153,10 +182,15 @@ var tableRow = regexp.MustCompile(`^\s{0,3}\|`)
 func (m *MD) process(line string) {
 	switch m.mode {
 	case mdPlainFence:
-		m.out(line + "\n")
 		if mk, ok := closingFenceLine(line); ok && mk[0] == m.marker[0] && len(mk) >= len(m.marker) {
-			m.mode = mdNormal
+			m.mode, m.hl = mdNormal, nil
+			m.out(m.opts.Style.Dim(line) + "\n")
+			return
 		}
+		if m.hl != nil {
+			line = m.hl.line(line)
+		}
+		m.out(line + "\n")
 		return
 	case mdChartFence:
 		m.held = append(m.held, line)
@@ -178,14 +212,24 @@ func (m *MD) process(line string) {
 			return
 		}
 		m.mode = mdPlainFence
-		m.out(line + "\n")
+		m.hl = newHighlighter(lang, m.opts.Style)
+		m.out(m.opts.Style.Dim(line) + "\n")
 		return
 	}
 	if tableRow.MatchString(line) {
 		m.mode, m.held = mdTable, []string{line}
 		return
 	}
-	m.out(line + "\n")
+	m.out(m.formatLine(line) + "\n")
+}
+
+// formatLine styles a whole ordinary line.
+func (m *MD) formatLine(line string) string {
+	if !m.styled() {
+		return line
+	}
+	prefix, skip, _ := m.lineStart(line, true)
+	return prefix + m.inl.feed(line[skip:], true)
 }
 
 func openFenceLine(line string) (marker, lang string, ok bool) {
@@ -204,10 +248,11 @@ func openFenceLine(line string) (marker, lang string, ok bool) {
 // Flush finishes the text: an unfinished block is printed as written, and an open line ends.
 func (m *MD) Flush() {
 	if m.line != "" {
-		line, streamed := m.line, m.printed > 0
-		m.line, m.printed = "", 0
+		line, streamed := m.line, m.started
+		rest := line[m.printed:]
+		m.line, m.printed, m.started = "", 0, false
 		if streamed {
-			m.out("\n")
+			m.out(m.finishStreamed(rest) + "\n")
 		} else {
 			m.process(line)
 		}
@@ -221,7 +266,7 @@ func (m *MD) Flush() {
 	case mdTable:
 		m.finishTable()
 	}
-	m.mode = mdNormal
+	m.mode, m.hl = mdNormal, nil
 }
 
 func (m *MD) finishChart() {
@@ -300,6 +345,11 @@ func (m *MD) finishTable() {
 			aligns[i] = style.Right
 		case !explicit && columnIsNumeric(rows[1:], i):
 			aligns[i] = style.Right
+		}
+	}
+	for _, r := range rows {
+		for i := range r {
+			r[i] = styleInline(m.opts.Style, r[i])
 		}
 	}
 	for _, l := range m.opts.Style.Table(rows, aligns, true) {
