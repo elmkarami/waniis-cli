@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/elmkarami/waniis-cli/internal/api"
+	"github.com/elmkarami/waniis-cli/internal/mark"
 	"github.com/elmkarami/waniis-cli/internal/render"
 	"github.com/elmkarami/waniis-cli/internal/style"
 )
@@ -134,6 +135,34 @@ func (a *Activity) Line(st style.Style, frame int, spinner bool) string {
 		mark = SpinnerFrames[frame%len(SpinnerFrames)]
 	}
 	return st.Cyan(mark) + " " + st.Dim(t)
+}
+
+// stopHint is the second line of the status while there is no real update to show.
+const stopHint = "/stop stops the run · Ctrl-C stops following"
+
+// Block is the status with the turning Waniis mark: two lines, the mark spanning both. The first
+// says one of Waniis's words and for how long; the second, the latest real update (what it is
+// reading, running or writing) or how to stop.
+func (a *Activity) Block(st style.Style, frame int, sp *mark.Spinner) string {
+	a.mu.Lock()
+	active, label, since, starts := a.active, a.label, a.since, a.starts
+	now := a.now()
+	a.mu.Unlock()
+	if !active {
+		return ""
+	}
+	elapsed := now.Sub(since)
+	word := Words[(int(elapsed/wordEvery)+(starts-1)*5)%len(Words)] + "…"
+	shown := "0s"
+	if elapsed >= time.Second {
+		shown = render.FormatElapsed(elapsed)
+	}
+	detail := label
+	if detail == "" {
+		detail = stopHint
+	}
+	m := sp.Lines(frame)
+	return m[0] + "  " + st.Bold(word) + " " + st.Dim("· "+shown) + "\n" + m[1] + "  " + st.Dim(detail)
 }
 
 // Describe says what a real event means for what Waniis is doing, "" when it says nothing new.

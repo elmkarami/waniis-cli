@@ -189,7 +189,13 @@ func (c *Console) draw() string {
 	end := min(len(buf), start+avail)
 	var b strings.Builder
 	c.above = 0
-	for _, row := range []string{c.partial, cutVisible(c.status, w-1)} {
+	rows := []string{c.partial}
+	if c.status != "" {
+		for _, l := range strings.Split(c.status, "\n") {
+			rows = append(rows, cutVisible(l, w-1))
+		}
+	}
+	for _, row := range rows {
 		if row != "" {
 			b.WriteString(row + "\x1b[0m\r\n")
 			c.above++

@@ -54,6 +54,14 @@ type Deps struct {
 	TermWidth func() int
 	// RetryDelay overrides the API client's base retry delay when non-zero.
 	RetryDelay time.Duration
+	// ConfigDir is where the CLI keeps its files (the daily version check); "" turns the check off.
+	ConfigDir string
+	// Executable is the running binary's path, symlinks resolved; nil uses the real one.
+	Executable func() (string, error)
+	// RunCommand runs a program with the CLI's output (brew); nil runs it for real.
+	RunCommand func(ctx context.Context, name string, args ...string) error
+	// ReleasesAPI is GitHub's releases API for the CLI; "" is the real one.
+	ReleasesAPI string
 }
 
 // DefaultDeps wires the real process.
@@ -140,7 +148,7 @@ personal token (WANIIS_TOKEN).`,
 	})
 	root.AddCommand(
 		a.loginCmd(), a.logoutCmd(), a.whoamiCmd(),
-		a.sessionsCmd(), a.exportCmd(), a.versionCmd(), a.modelsCmd(),
+		a.sessionsCmd(), a.exportCmd(), a.versionCmd(), a.modelsCmd(), a.upgradeCmd(),
 	)
 	// The most used session commands also at the top level (CLT-15/FR-8).
 	root.AddCommand(
@@ -159,11 +167,31 @@ personal token (WANIIS_TOKEN).`,
 func Execute(ctx context.Context, d Deps, args []string) int {
 	root, a := build(d)
 	root.SetArgs(args)
-	err := root.ExecuteContext(ctx)
-	if err == nil {
-		return exitcode.OK
+	// Once a day, in a terminal, look for a new version while the command runs, and mention it
+	// in one line after (cobra has parsed --json by the time the command runs).
+	var checked <-chan struct{}
+	pre := root.PersistentPreRunE
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if a.notifierOn(cmd.Name()) {
+			checked = a.startUpdateCheck(ctx)
+		}
+		return pre(cmd, args)
 	}
-	return a.reportError(ctx, args, err)
+	err := root.ExecuteContext(ctx)
+	code := exitcode.OK
+	if err != nil {
+		code = a.reportError(ctx, args, err)
+	}
+	if checked != nil {
+		select {
+		case <-checked:
+		case <-time.After(time.Second):
+		}
+		if n := a.updateNotice(); n != "" {
+			fmt.Fprintln(a.Err, "\n"+n)
+		}
+	}
+	return code
 }
 
 // runtime is a resolved API client for one command run.

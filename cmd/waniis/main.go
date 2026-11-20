@@ -32,6 +32,7 @@ func main() {
 		Notify:   func(msg string) { fmt.Fprintln(os.Stderr, msg) },
 	}
 	deps := commands.DefaultDeps(store)
+	deps.ConfigDir = dir
 	deps.StdinTTY = term.IsTerminal(int(os.Stdin.Fd()))
 	deps.StdoutTTY = term.IsTerminal(int(os.Stdout.Fd()))
 	deps.OpenBrowser = browser.OpenURL

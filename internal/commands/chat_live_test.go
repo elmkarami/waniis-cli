@@ -102,12 +102,19 @@ func TestChatKeepsTypingAndQueuesWhileWaniisWorks(t *testing.T) {
 	c.send("also add a te")
 	live <- ev(3, "agent.message.delta", pl{"runId": "r1", "text": "Looking at the retry "})
 	lines := c.waitScreen(t, "the streamed text above the typed text", func(l []string, term *termtest.Term) bool {
-		return len(l) >= 3 && strings.Contains(l[len(l)-3], "Waniis: Looking at the retry") &&
+		return len(l) >= 4 && strings.Contains(l[len(l)-4], "Waniis: Looking at the retry") &&
 			strings.Contains(l[len(l)-2], "Writing the answer…") && l[len(l)-1] == "› also add a te" &&
 			term.CursorLine() == "› also add a te" && term.C == 2+len("also add a te")
 	})
-	if !strings.ContainsAny(lines[len(lines)-2], "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") || !strings.Contains(lines[len(lines)-2], " · ") {
-		t.Fatalf("the status line has a spinner and the elapsed time: %q", lines[len(lines)-2])
+	// The status is two lines: the turning Waniis mark (Braille) beside a word and the elapsed
+	// time, then what Waniis is doing.
+	for _, l := range lines[len(lines)-3 : len(lines)-1] {
+		if !strings.ContainsFunc(l, func(r rune) bool { return r > 0x2800 && r <= 0x28ff }) {
+			t.Fatalf("the status shows the mark: %q", l)
+		}
+	}
+	if !strings.Contains(lines[len(lines)-3], " · ") {
+		t.Fatalf("the status has the elapsed time: %q", lines[len(lines)-3])
 	}
 
 	// A tool call changes the status; the buffer survives the redraw.

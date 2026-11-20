@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/elmkarami/waniis-cli/internal/api"
+	"github.com/elmkarami/waniis-cli/internal/mark"
 	"github.com/elmkarami/waniis-cli/internal/style"
 	"github.com/elmkarami/waniis-cli/internal/termtest"
 )
@@ -249,5 +250,30 @@ func TestWordsAreWaniisOwn(t *testing.T) {
 		if seen[w] {
 			t.Fatalf("%q is not ours", w)
 		}
+	}
+}
+
+func TestActivityBlockDrawsTheMark(t *testing.T) {
+	now := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	a := NewActivity(func() time.Time { return now })
+	sp := mark.NewSpinner(mark.Color256)
+	if a.Block(style.Style{}, 0, sp) != "" {
+		t.Fatal("nothing while idle")
+	}
+	a.Start()
+	now = now.Add(5 * time.Second)
+	lines := strings.Split(a.Block(style.Style{}, 0, sp), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("two lines: %q", lines)
+	}
+	m := sp.Lines(0)
+	if !strings.HasPrefix(lines[0], m[0]) || !strings.HasPrefix(lines[1], m[1]) {
+		t.Fatalf("the mark spans both lines: %q", lines)
+	}
+	if !strings.HasSuffix(lines[0], "… · 5s") || !strings.HasSuffix(lines[1], stopHint) {
+		t.Fatalf("%q", lines)
+	}
+	if a.Block(style.Style{}, 3, sp) == a.Block(style.Style{}, 0, sp) {
+		t.Fatal("the mark turns from frame to frame")
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/elmkarami/waniis-cli/internal/chat"
 	"github.com/elmkarami/waniis-cli/internal/exitcode"
 	"github.com/elmkarami/waniis-cli/internal/export"
+	"github.com/elmkarami/waniis-cli/internal/mark"
 	"github.com/elmkarami/waniis-cli/internal/output"
 	"github.com/elmkarami/waniis-cli/internal/render"
 	"github.com/elmkarami/waniis-cli/internal/sessionstate"
@@ -109,8 +110,9 @@ type chatSession struct {
 	own     *render.Own    // what this chat sent, so its echoes aren't shown twice
 	act     *chat.Activity // the live status: what Waniis is doing, for how long
 	tried   map[string]time.Time
-	spinner bool         // draw the spinner (a terminal with colors)
-	frame   atomic.Int32 // the spinner's frame
+	spinner bool          // draw the spinner (a terminal with colors)
+	mark    *mark.Spinner // the turning Waniis mark, when the terminal has colors
+	frame   atomic.Int32  // the spinner's frame
 
 	work       chan string   // submitted lines, handled one at a time off the input loop
 	workDone   chan struct{} // closed when the worker has handled everything submitted
@@ -145,6 +147,9 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 	ca.Out, ca.Err = s.con, s.con
 	s.a = &ca
 	s.spinner = raw && sty.On
+	if s.spinner {
+		s.mark = mark.NewSpinner(mark.DetectColor(a.Getenv))
+	}
 	if raw {
 		go s.ticker()
 	}
@@ -300,6 +305,10 @@ func (s *chatSession) ticker() {
 // refreshStatus draws the status line (a terminal only; nothing is drawn when output is piped).
 func (s *chatSession) refreshStatus() {
 	if s.con == nil || !s.con.Raw {
+		return
+	}
+	if s.mark != nil {
+		s.con.SetStatus(s.act.Block(s.sty, int(s.frame.Load()), s.mark))
 		return
 	}
 	s.con.SetStatus(s.act.Line(s.sty, int(s.frame.Load()), s.spinner))

@@ -4,6 +4,25 @@ What changed in each release of `waniis`. The newest is first. A release's notes
 its section here, so every version needs one before it can be released (the Release workflow
 checks).
 
+## v0.1.3 — 2026-11-20
+
+### Added
+
+- **`waniis upgrade`** upgrades the CLI. Installed with Homebrew, it runs `brew update` and then
+  `brew upgrade elmkarami/tap/waniis` for you, so an out-of-date tap no longer hides a new
+  version. Otherwise it downloads the release for your system, checks it against the release's
+  checksums and replaces itself. `--check` only says whether there is a newer version (with
+  `--json` for scripts); `--version v0.1.2` installs a given release (not with Homebrew).
+- **A daily look for new versions.** Once a day, in a terminal, waniis checks GitHub while a
+  command runs (never slowing it down) and, when there is a newer version, says so in one line
+  after the command: `A new version of waniis is available: 0.1.2 → 0.1.3. Run: waniis upgrade`.
+  It stays quiet with `--json`, in pipes, in CI and in `waniis mcp`;
+  `WANIIS_NO_UPDATE_NOTIFIER=1` turns it off.
+- **The Waniis mark, turning in 3D.** While Waniis works, the chat's status shows the mark
+  (the W, its loop and the dot) spinning in the brand's orange, drawn in Braille over two
+  lines, beside one of Waniis's words and the time, with the current step (what it is reading,
+  running or writing) on the line below.
+
 ## v0.1.2 — 2026-11-20
 
 ### Added

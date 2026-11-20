@@ -13,7 +13,7 @@ Nothing runs on your machine: sessions run in Waniis's sandboxes.
 
 ## Install
 
-Homebrew (once the tap is published):
+Homebrew:
 
 ```sh
 brew install elmkarami/tap/waniis
@@ -21,8 +21,14 @@ brew install elmkarami/tap/waniis
 
 From a release: download the archive for your system from the
 [releases page](https://github.com/elmkarami/waniis-cli/releases), check it against
-`checksums.txt`, and put `waniis` on your `PATH`. Releases cover macOS, Linux and Windows on
-amd64 and arm64.
+`checksums.txt`, and put `waniis` on your `PATH`. Releases cover macOS, Linux, Windows and the
+BSDs, on amd64, arm64 and more.
+
+**Upgrading:** `waniis upgrade`. With Homebrew it runs `brew update` and `brew upgrade` for you
+(a plain `brew upgrade` can miss a new version until Homebrew refreshes the tap); otherwise it
+downloads the new release, checks its checksum and replaces itself. `waniis upgrade --check` only
+looks. Once a day, in a terminal, waniis also mentions a new version in one line after a command;
+`WANIIS_NO_UPDATE_NOTIFIER=1` turns that off.
 
 With Go 1.24 or newer:
 
@@ -80,6 +86,7 @@ echo "$TOKEN" | waniis login --with-token   # or keep it in the keychain
 | `waniis` / `waniis chat [id]` | Interactive chat in the terminal |
 | `waniis mcp` | MCP server over stdio for AI agents |
 | `waniis version` | Version |
+| `waniis upgrade [--check]` | Upgrade to the newest version (through Homebrew when it installed waniis) |
 | `waniis completion <shell>` | Shell completion |
 
 `waniis s` is short for `waniis sessions`. Run any command with `--help` for its flags and examples.
