@@ -274,3 +274,5 @@ func isNotFound(err error) bool {
 	var ee *exitcode.Error
 	return errors.As(err, &ee) && ee.Code == exitcode.NotFound
 }
+
+func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }

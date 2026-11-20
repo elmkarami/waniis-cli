@@ -47,6 +47,9 @@ type Deps struct {
 	Hostname  func() string
 	// PollInterval is how often --wait checks the session.
 	PollInterval time.Duration
+	// MakeRaw puts the terminal's input in raw mode for the interactive chat and returns the
+	// function that restores it. Nil: the chat reads plain lines.
+	MakeRaw func() (restore func(), err error)
 	// TermWidth is the terminal's width in columns; nil or 0 means 80.
 	TermWidth func() int
 	// RetryDelay overrides the API client's base retry delay when non-zero.
@@ -100,10 +103,20 @@ func build(d Deps) (*cobra.Command, *app) {
 	root := &cobra.Command{
 		Use:   "waniis",
 		Short: "Waniis from the command line",
-		Long: `waniis starts, follows, stops, shares and searches Waniis sessions from a terminal,
-and exports them to CSV or Excel. It talks to the Waniis API as you, with a token from the
-browser sign-in (waniis login) or a personal token (WANIIS_TOKEN).`,
-		SilenceUsage:      true,
+		Long: `waniis starts, follows, prompts, steers, stops, shares and searches Waniis sessions from a
+terminal, and exports them to CSV or Excel. Run it with no arguments in a terminal for an
+interactive chat (waniis chat), or use waniis logs, watch and mcp from scripts and AI agents.
+It talks to the Waniis API as you, with a token from the browser sign-in (waniis login) or a
+personal token (WANIIS_TOKEN).`,
+		SilenceUsage: true,
+		Args:         cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			// `waniis` alone, in a terminal, opens the chat; elsewhere it shows the help.
+			if a.interactive() {
+				return a.runChat(cmd.Context(), "", chatOptions{})
+			}
+			return cmd.Help()
+		},
 		SilenceErrors:     true,
 		DisableAutoGenTag: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -134,7 +147,7 @@ browser sign-in (waniis login) or a personal token (WANIIS_TOKEN).`,
 		topLevel(a.sessionsStartCmd(), "new \"<prompt>\""),
 		topLevel(a.sessionsListCmd(), "ls"),
 		topLevel(a.sessionsLogsCmd(), "logs <id>"),
-		a.watchCmd(), a.mcpCmd(),
+		a.watchCmd(), a.mcpCmd(), a.chatCmd(),
 	)
 	root.AddCommand(a.authCmd())
 	root.InitDefaultCompletionCmd()

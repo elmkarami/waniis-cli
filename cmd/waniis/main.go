@@ -35,6 +35,14 @@ func main() {
 	deps.StdinTTY = term.IsTerminal(int(os.Stdin.Fd()))
 	deps.StdoutTTY = term.IsTerminal(int(os.Stdout.Fd()))
 	deps.OpenBrowser = browser.OpenURL
+	deps.MakeRaw = func() (func(), error) {
+		fd := int(os.Stdin.Fd())
+		old, err := term.MakeRaw(fd)
+		if err != nil {
+			return nil, err
+		}
+		return func() { _ = term.Restore(fd, old) }, nil
+	}
 	deps.TermWidth = func() int {
 		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
 			return w

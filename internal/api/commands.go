@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 )
@@ -205,16 +206,78 @@ func (c *Client) Surfaces(ctx context.Context, id string) (*SurfacesView, error)
 	return &v, nil
 }
 
-// PreviewURL asks for a surface's one-time link (GET /:id/surfaces/:slug/open answers a 302 with a
-// 60-second, single-use ticket) and returns the Location without following it.
+// PreviewURL asks for a surface's one-time link (GET /:id/surfaces/:slug/open answers a 302 with
+// a 60-second, single-use ticket) and returns the Location without following it.
 func (c *Client) PreviewURL(ctx context.Context, id, slug string) (string, error) {
 	hc := *c.HTTP
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	cc := *c
-	cc.HTTP = &hc
-	resp, err := cc.Do(ctx, Request{Method: http.MethodGet, Path: "/v1/sessions/" + url.PathEscape(id) + "/surfaces/" + url.PathEscape(slug) + "/open"}, nil)
+	rctx, cancel := context.WithTimeout(ctx, c.Timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(rctx, http.MethodGet, c.BaseURL+"/v1/sessions/"+url.PathEscape(id)+"/surfaces/"+url.PathEscape(slug)+"/open", nil)
 	if err != nil {
 		return "", err
 	}
-	return resp.Header.Get("Location"), nil
+	req.Header.Set("User-Agent", c.UserAgent)
+	if c.Workspace != "" {
+		req.Header.Set(HeaderWorkspace, c.Workspace)
+	}
+	if c.Tokens != nil {
+		tok, err := c.Tokens.Token(ctx)
+		if err != nil {
+			return "", err
+		}
+		if tok != "" {
+			req.Header.Set("Authorization", "Bearer "+tok)
+		}
+	}
+	c.logf("> GET %s", Redact(req.URL.String()))
+	res, err := hc.Do(req)
+	if err != nil {
+		return "", networkError(err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<16))
+	if res.StatusCode >= 300 && res.StatusCode < 400 {
+		return res.Header.Get("Location"), nil
+	}
+	return "", MapError(res.StatusCode, body, res.Header.Get("x-request-id"))
+}
+
+// DiffFile is one changed file in a session's diff.
+type DiffFile struct {
+	Path      string `json:"path"`
+	Status    string `json:"status"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+}
+
+// RepoDiff is one repo's changes: pushed (from GitHub) or kept (still in the sandbox).
+type RepoDiff struct {
+	Repo        string `json:"repo"`
+	Source      string `json:"source"`
+	PullRequest *struct {
+		Number int    `json:"number"`
+		URL    string `json:"url"`
+	} `json:"pullRequest"`
+	Files      []DiffFile `json:"files"`
+	TotalFiles int        `json:"totalFiles"`
+}
+
+// SessionDiff is GET /v1/sessions/:id/diff, without the patches.
+type SessionDiff struct {
+	Repos []RepoDiff `json:"repos"`
+	Gaps  []struct {
+		Source string `json:"source"`
+		Repo   string `json:"repo"`
+		Reason string `json:"reason"`
+	} `json:"gaps"`
+}
+
+// Diff is GET /v1/sessions/:id/diff.
+func (c *Client) Diff(ctx context.Context, id string) (*SessionDiff, error) {
+	var d SessionDiff
+	if _, err := c.Do(ctx, Request{Method: http.MethodGet, Path: "/v1/sessions/" + url.PathEscape(id) + "/diff"}, &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
 }

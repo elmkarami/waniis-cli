@@ -74,6 +74,12 @@ func (f *fake) extraRoute(w http.ResponseWriter, r *http.Request, id, sub string
 			return true
 		}
 		writeJSON(w, 200, map[string]any{"ok": true})
+	case r.Method == "GET" && sub == "diff":
+		writeJSON(w, 200, map[string]any{"repos": []map[string]any{{"repo": "acme/api", "source": "pushed", "totalFiles": 2,
+			"pullRequest": map[string]any{"number": 5, "url": "https://github.com/acme/api/pull/5"},
+			"files": []map[string]any{{"path": "src/x.ts", "status": "modified", "additions": 3, "deletions": 1, "binary": false, "patch": "@@"},
+				{"path": "src/y.ts", "status": "added", "additions": 10, "deletions": 0, "binary": false}}}},
+			"gaps": []map[string]any{{"source": "kept", "reason": "sandbox_asleep"}}})
 	case r.Method == "GET" && sub == "surfaces":
 		writeJSON(w, 200, map[string]any{"sandbox": "ready", "previews": true, "terminals": []any{}, "editor": map[string]any{"running": false}, "desktop": map[string]any{"running": false},
 			"ports": []map[string]any{{"port": 3000, "label": "web", "service": nil, "declared": true, "listening": true}}})
