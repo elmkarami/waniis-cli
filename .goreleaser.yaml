@@ -5,7 +5,8 @@ project_name: waniis
 
 before:
   hooks:
-    - go mod tidy
+    # No `go mod tidy` here: it can move pinned modules (the MCP SDK is held at the newest version
+    # that builds on go.mod's Go) and leave the tree dirty mid-release.
     - ./scripts/completions.sh
 
 builds:
@@ -14,8 +15,46 @@ builds:
     binary: waniis
     env:
       - CGO_ENABLED=0
-    goos: [darwin, linux, windows]
-    goarch: [amd64, arm64]
+    # Every common target. 32-bit builds (386, arm) export CSV only: the Excel library doesn't
+    # compile there (internal/export/xlsx_32bit.go).
+    goos: [darwin, linux, windows, freebsd, openbsd, netbsd]
+    goarch: [amd64, arm64, "386", arm, ppc64le, s390x, riscv64, loong64, mips64le]
+    goarm: ["6", "7"]
+    ignore:
+      - { goos: darwin, goarch: "386" }
+      - { goos: darwin, goarch: arm }
+      - { goos: darwin, goarch: ppc64le }
+      - { goos: darwin, goarch: s390x }
+      - { goos: darwin, goarch: riscv64 }
+      - { goos: darwin, goarch: loong64 }
+      - { goos: darwin, goarch: mips64le }
+      - { goos: windows, goarch: arm }
+      - { goos: windows, goarch: ppc64le }
+      - { goos: windows, goarch: s390x }
+      - { goos: windows, goarch: riscv64 }
+      - { goos: windows, goarch: loong64 }
+      - { goos: windows, goarch: mips64le }
+      - { goos: freebsd, goarch: arm }
+      - { goos: freebsd, goarch: ppc64le }
+      - { goos: freebsd, goarch: s390x }
+      - { goos: freebsd, goarch: riscv64 }
+      - { goos: freebsd, goarch: loong64 }
+      - { goos: freebsd, goarch: mips64le }
+      - { goos: openbsd, goarch: "386" }
+      - { goos: openbsd, goarch: arm }
+      - { goos: openbsd, goarch: ppc64le }
+      - { goos: openbsd, goarch: s390x }
+      - { goos: openbsd, goarch: riscv64 }
+      - { goos: openbsd, goarch: loong64 }
+      - { goos: openbsd, goarch: mips64le }
+      - { goos: netbsd, goarch: arm64 }
+      - { goos: netbsd, goarch: "386" }
+      - { goos: netbsd, goarch: arm }
+      - { goos: netbsd, goarch: ppc64le }
+      - { goos: netbsd, goarch: s390x }
+      - { goos: netbsd, goarch: riscv64 }
+      - { goos: netbsd, goarch: loong64 }
+      - { goos: netbsd, goarch: mips64le }
     flags: [-trimpath]
     ldflags:
       - -s -w
@@ -29,7 +68,7 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-    name_template: "waniis_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "waniis_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}"
     files:
       - LICENSE
       - README.md
