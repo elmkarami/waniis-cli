@@ -1,0 +1,14 @@
+Here you go.
+[1mRefunds by plan, May 2026 (USD)[0m
+
+Team       [36m███████████████████████████████████▎[0m $7,400
+Business   [36m████████████████████████▎[0m $5,100
+Enterprise [36m████████████████████████████████████████████████████████████[0m $12,600
+
+[1m          [0m  [1mRefunds[0m
+[2m──────────  ───────[0m
+Team         $7,400
+Business     $5,100
+Enterprise  $12,600
+[2mSource: Stripe · Redshift (finance.refunds)[0m
+Done.

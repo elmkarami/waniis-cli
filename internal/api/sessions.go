@@ -254,12 +254,59 @@ func (c *Client) StopRun(ctx context.Context, id string) error {
 	return err
 }
 
-// Event is one session event (FND-05): its sequence number, type and payload.
+// Actor says who caused an event.
+type Actor struct {
+	Kind      string `json:"kind"`
+	ID        string `json:"id,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	Name      string `json:"name,omitempty"`
+}
+
+// PrivateMark marks a personal result (DEC-155): only its owner sees the content; everyone else
+// gets a placeholder.
+type PrivateMark struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	OwnerID   string `json:"ownerId"`
+	OwnerName string `json:"ownerName,omitempty"`
+	Server    string `json:"server"`
+	Title     string `json:"title"`
+	Hidden    bool   `json:"hidden,omitempty"`
+	Shared    bool   `json:"shared,omitempty"`
+}
+
+// Event is one session event (FND-05): its sequence number, type and payload. Raw keeps the
+// server's own JSON so --json passes every field through.
 type Event struct {
+	V       int             `json:"v,omitempty"`
 	Seq     int             `json:"seq"`
 	Type    string          `json:"type"`
 	At      string          `json:"at"`
+	Actor   *Actor          `json:"actor,omitempty"`
+	Private *PrivateMark    `json:"private,omitempty"`
 	Payload json.RawMessage `json:"payload"`
+	Raw     json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON decodes an event and keeps the raw bytes.
+func (e *Event) UnmarshalJSON(b []byte) error {
+	type plain Event
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*e = Event(p)
+	e.Raw = append(json.RawMessage(nil), b...)
+	return nil
+}
+
+// MarshalJSON writes the server's own JSON when known.
+func (e Event) MarshalJSON() ([]byte, error) {
+	if len(e.Raw) > 0 {
+		return e.Raw, nil
+	}
+	type plain Event
+	return json.Marshal(plain(e))
 }
 
 // RunCompleted is the payload of a run.completed event.
@@ -270,16 +317,65 @@ type RunCompleted struct {
 	CostUSD float64 `json:"costUsd"`
 }
 
-// Events is GET /v1/sessions/:id/events?since=.
-func (c *Client) Events(ctx context.Context, id string, since int) ([]Event, error) {
-	var out struct {
-		Events []Event `json:"events"`
+// EventsQuery picks which events GET /v1/sessions/:id/events returns. Since is always sent
+// unless Tail is set; Tail asks for the last N events; Limit and Before page.
+type EventsQuery struct {
+	Since  int
+	Tail   int
+	Limit  int
+	Before int
+}
+
+// EventsPage is the events answer: `{events, lastSeq, hasMore}`. The older answer is only
+// `{events}`; HasLastSeq says whether the server sent lastSeq.
+type EventsPage struct {
+	Events     []Event `json:"events"`
+	LastSeq    int     `json:"lastSeq"`
+	HasMore    bool    `json:"hasMore"`
+	HasLastSeq bool    `json:"-"`
+}
+
+// EventsPage is GET /v1/sessions/:id/events.
+func (c *Client) EventsPage(ctx context.Context, id string, eq EventsQuery) (*EventsPage, error) {
+	var raw struct {
+		Events  []Event `json:"events"`
+		LastSeq *int    `json:"lastSeq"`
+		HasMore bool    `json:"hasMore"`
 	}
-	q := url.Values{"since": {strconv.Itoa(since)}}
-	if _, err := c.Do(ctx, Request{Method: http.MethodGet, Path: "/v1/sessions/" + url.PathEscape(id) + "/events", Query: q}, &out); err != nil {
+	q := url.Values{}
+	switch {
+	case eq.Tail > 0:
+		q.Set("tail", strconv.Itoa(eq.Tail))
+	default:
+		q.Set("since", strconv.Itoa(eq.Since))
+	}
+	if eq.Limit > 0 {
+		q.Set("limit", strconv.Itoa(eq.Limit))
+	}
+	if eq.Before > 0 {
+		q.Set("before", strconv.Itoa(eq.Before))
+	}
+	if _, err := c.Do(ctx, Request{Method: http.MethodGet, Path: "/v1/sessions/" + url.PathEscape(id) + "/events", Query: q}, &raw); err != nil {
 		return nil, err
 	}
-	return out.Events, nil
+	page := &EventsPage{Events: raw.Events, HasMore: raw.HasMore}
+	if raw.LastSeq != nil {
+		page.LastSeq, page.HasLastSeq = *raw.LastSeq, true
+	} else {
+		for _, e := range raw.Events {
+			page.LastSeq = max(page.LastSeq, e.Seq)
+		}
+	}
+	return page, nil
+}
+
+// Events is GET /v1/sessions/:id/events?since=.
+func (c *Client) Events(ctx context.Context, id string, since int) ([]Event, error) {
+	page, err := c.EventsPage(ctx, id, EventsQuery{Since: since})
+	if err != nil {
+		return nil, err
+	}
+	return page.Events, nil
 }
 
 // ShareLink is the session's share link as its owner sees it.

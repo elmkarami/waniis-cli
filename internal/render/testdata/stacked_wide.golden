@@ -1,0 +1,15 @@
+Here you go.
+Tickets by status (tickets)
+
+█ Open   ▓ Closed
+
+Mon ██████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 40 tickets
+Tue ███████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 30 tickets
+Wed ███████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 30 tickets
+
+           Open      Closed
+───  ──────────  ──────────
+Mon  10 tickets  30 tickets
+Tue  20 tickets  10 tickets
+Wed   5 tickets  25 tickets
+Done.

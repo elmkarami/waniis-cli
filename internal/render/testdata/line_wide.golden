@@ -1,0 +1,23 @@
+Here you go.
+p95 latency (ms)
+
+300 ms ┤                                ●
+       ┤                               ·
+       ┤                              ·
+       ┤                            ··
+       ┤                           ·
+       ┤                          ·
+       ┤    ····●·······●···     ·
+120 ms ┤●···                ····●
+       └─────────────────────────────────
+        Mon                           Fri
+
+        API
+───  ──────
+Mon  120 ms
+Tue  135 ms
+Wed  150 ms
+Thu  128 ms
+Fri  300 ms
+Source: Datadog
+Done.
