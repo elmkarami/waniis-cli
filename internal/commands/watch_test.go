@@ -39,12 +39,12 @@ func TestLogsDefaultsToTail100(t *testing.T) {
 	h := newHarness(t)
 	h.signIn()
 	for i := 1; i <= 150; i++ {
-		h.f.addEvents("ses_1", ev(i, "run.stop_requested", pl{"runId": "r", "requestedBy": fmt.Sprintf("u%d", i)}))
+		h.f.addEvents("ses_1", ev(i, "run.steered", pl{"runId": "r", "authorId": "u", "text": fmt.Sprintf("u%d", i)}))
 	}
 	code, out, errOut := h.run("sessions", "logs", "ses_1")
 	eq(t, code, 0, "exit")
 	eq(t, h.f.last("GET", "/v1/sessions/ses_1/events").Query["tail"][0], "100", "tail asked of the server")
-	eq(t, strings.Count(out, "stop requested"), 100, "lines")
+	eq(t, strings.Count(out, "steered"), 100, "lines")
 	contains(t, out, "u150")
 	notContains(t, out, "u50\n")
 	noSecrets(t, out, errOut)
@@ -55,11 +55,11 @@ func TestLogsTailKeepsLastNWhenServerIgnoresTail(t *testing.T) {
 	h.signIn()
 	h.f.legacyEvents = true
 	for i := 1; i <= 10; i++ {
-		h.f.addEvents("ses_1", ev(i, "run.stop_requested", pl{"runId": "r", "requestedBy": fmt.Sprintf("u%d", i)}))
+		h.f.addEvents("ses_1", ev(i, "run.steered", pl{"runId": "r", "authorId": "u", "text": fmt.Sprintf("u%d", i)}))
 	}
 	code, out, _ := h.run("logs", "ses_1", "--tail", "3")
 	eq(t, code, 0, "exit")
-	eq(t, strings.Count(out, "stop requested"), 3, "lines")
+	eq(t, strings.Count(out, "steered"), 3, "lines")
 	contains(t, out, "u10")
 	notContains(t, out, "u7 ")
 }
@@ -85,7 +85,7 @@ func TestLogsAllWithLegacyServerStopsAfterOnePage(t *testing.T) {
 	seedRun(h, "ses_1")
 	code, out, _ := h.run("logs", "ses_1", "--all")
 	eq(t, code, 0, "exit")
-	contains(t, out, "› prompt")
+	contains(t, out, "› you:")
 	eq(t, h.f.count("GET", "/v1/sessions/ses_1/events"), 1, "one request")
 }
 
@@ -96,7 +96,7 @@ func TestLogsSince(t *testing.T) {
 	code, out, _ := h.run("logs", "ses_1", "--since", "2")
 	eq(t, code, 0, "exit")
 	contains(t, out, "src/x.ts")
-	notContains(t, out, "› prompt")
+	notContains(t, out, "› you:")
 }
 
 func TestLogsRenderedLines(t *testing.T) {
@@ -109,8 +109,8 @@ func TestLogsRenderedLines(t *testing.T) {
 		runDone(6, "success"))
 	code, out, _ := h.run("logs", "ses_1")
 	eq(t, code, 0, "exit")
-	contains(t, out, "› prompt (maya): fix the flaky test")
-	contains(t, out, "▶ run started (build)")
+	contains(t, out, "› you: fix the flaky test")
+	contains(t, out, "▶ run started")
 	contains(t, out, "⚙ tool github.get_file src/x.ts ✓")
 	contains(t, out, "⛔ blocked ramp.com (GET)")
 	contains(t, out, "■ run completed: did the thing")
@@ -331,7 +331,7 @@ func TestStatusUsesTheServersAnswer(t *testing.T) {
 	eq(t, code, 0, "exit")
 	contains(t, out, "running")
 	contains(t, out, "(draft)")
-	contains(t, out, "r9 (verifying, build)")
+	contains(t, out, "(verifying, build)")
 	contains(t, out, "Queued prompts")
 	contains(t, out, "earlier work")
 	contains(t, out, "#7")
@@ -475,7 +475,7 @@ func TestTopLevelShortcuts(t *testing.T) {
 	seedRun(h, "ses_001")
 	code, out, _ = h.run("logs", "ses_001")
 	eq(t, code, 0, "logs")
-	contains(t, out, "› prompt")
+	contains(t, out, "› you:")
 	_ = time.Second
 }
 

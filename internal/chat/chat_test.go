@@ -218,24 +218,28 @@ func TestConsoleRawKeepsTheInputLine(t *testing.T) {
 	typeKeys(c.Ed, "/st")
 	c.Write([]byte("an event\n"))
 	s := out.String()
-	if !strings.HasPrefix(s, "\r\x1b[J") || !strings.Contains(s, "an event\r\n") {
+	if !strings.Contains(s, "an event\x1b[0m\r\n") {
 		t.Fatalf("output goes above the prompt: %q", s)
 	}
-	tail := s[strings.Index(s, "an event\r\n")+len("an event\r\n"):]
+	tail := s[strings.Index(s, "an event"):]
 	if !strings.Contains(tail, "› /st") || !strings.Contains(tail, "/status") || !strings.Contains(tail, "/stop") {
 		t.Fatalf("prompt and menu are drawn again: %q", tail)
 	}
-	if !strings.Contains(tail, "\x1b[") || !strings.HasSuffix(tail, "\r\x1b[5C") {
+	if !strings.HasSuffix(tail, "\r\x1b[5C") {
 		t.Fatalf("cursor goes back to the input line: %q", tail)
 	}
 
-	// A partial line (streamed text) doesn't redraw until it ends.
+	// A half-written line (streamed text) is shown above the input line, which stays drawn.
 	out.Reset()
 	c.Write([]byte("Waniis: Hel"))
-	c.Redraw()
+	s = out.String()
+	if !strings.Contains(s, "Waniis: Hel\x1b[0m\r\n› /st") {
+		t.Fatalf("the partial line sits above the prompt: %q", s)
+	}
+	out.Reset()
 	c.Write([]byte("lo\n"))
 	s = out.String()
-	if strings.Count(s, "› /st\r\n") != 1 || !strings.Contains(s, "Waniis: Hello\r\n") {
+	if strings.Count(s, "› /st\r\n") != 1 || !strings.Contains(s, "Waniis: Hello\x1b[0m\r\n") {
 		t.Fatalf("%q", s)
 	}
 }

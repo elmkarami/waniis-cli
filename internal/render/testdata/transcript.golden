@@ -1,9 +1,9 @@
-› prompt (maya): fix the flaky test
-▶ run started (build)
+› maya: fix the flaky test
+▶ run started
 Waniis: Looking at it.
 ⚙ tool github.get_file src/x.ts ✓
 ⛔ blocked ramp.com (GET) — not allowed
-⏸ needs approval: network access to ramp.com (read) — docs; request n1
+⏸ needs approval: network access to ramp.com (read) — docs
 ✓ checks: tests 24 passed, lint, typecheck
 PR acme/api#318 opened https://github.com/acme/api/pull/318
 PR #318 merged by maya

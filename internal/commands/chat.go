@@ -38,9 +38,10 @@ func (a *app) chatCmd() *cobra.Command {
 		Short: "Talk to Waniis in your terminal (line based, not full screen)",
 		Long: `An interactive chat. Without an id the first line you type starts a new session on this
 checkout's repo (--chat: a conversation with no repo). With an id it follows that session. Events
-stream above the prompt line as they happen.
+stream above the prompt line as they happen, and you can keep typing while Waniis works, with a
+status line (what it is doing, for how long) above the prompt.
 
-Enter sends a prompt (it is queued if a run is going). /steer <text> redirects the run that is
+Enter sends a message (it is queued if a run is going). /steer <text> redirects the run that is
 going. Type / to see the slash commands, Tab completes one, Up and Down pick, Esc closes the menu;
 /help lists them all. Ctrl-C once stops following (the session keeps running); twice, or /quit,
 leaves. Without a terminal on stdin the lines are read one by one, with no menu: pipe a prompt in
@@ -103,6 +104,19 @@ type chatSession struct {
 	noRepo       bool
 	ctrlC        int
 	promptStr    atomic.Pointer[string]
+
+	people  *render.People // who is who: you, the others, never an id
+	own     *render.Own    // what this chat sent, so its echoes aren't shown twice
+	act     *chat.Activity // the live status: what Waniis is doing, for how long
+	tried   map[string]time.Time
+	spinner bool         // draw the spinner (a terminal with colors)
+	frame   atomic.Int32 // the spinner's frame
+
+	work       chan string   // submitted lines, handled one at a time off the input loop
+	workDone   chan struct{} // closed when the worker has handled everything submitted
+	quit       chan struct{} // closed when a command asked to leave
+	quitOnce   sync.Once
+	tickerStop chan struct{}
 }
 
 func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
@@ -114,7 +128,9 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 	ca.g.JSON = false
 	sty := style.Style{On: a.colorOn()}
 	s := &chatSession{rt: rt, ctx: ctx, opts: o, sty: sty, ed: chat.NewEditor(), asked: map[string]bool{},
-		mode: o.Mode, model: o.Model, noRepo: o.NoRepo, st: sessionstate.New()}
+		mode: o.Mode, model: o.Model, noRepo: o.NoRepo, st: sessionstate.New(),
+		people: render.NewPeople(a.selfID(ctx, rt), nil), own: render.NewOwn(a.Now), act: chat.NewActivity(a.Now),
+		tried: map[string]time.Time{}, tickerStop: make(chan struct{})}
 	s.refreshPrompt()
 	raw := false
 	var restore func()
@@ -127,6 +143,10 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 	s.con = &chat.Console{Out: a.Out, Raw: raw, Width: a.termWidth, Ed: s.ed, Prompt: s.promptText, Bold: sty.Bold, Dim: sty.Dim}
 	ca.Out, ca.Err = s.con, s.con
 	s.a = &ca
+	s.spinner = raw && sty.On
+	if raw {
+		go s.ticker()
+	}
 
 	if id != "" {
 		if err := s.attach(id); err != nil {
@@ -140,6 +160,7 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 		s.con.Redraw()
 	}
 	err = s.loop(raw)
+	close(s.tickerStop)
 	s.stopFollowing()
 	s.con.Hide()
 	s.farewell()
@@ -210,10 +231,77 @@ func (s *chatSession) farewell() {
 // ---- input ----
 
 func (s *chatSession) loop(raw bool) error {
+	s.work = make(chan string, 256)
+	s.workDone = make(chan struct{})
+	s.quit = make(chan struct{})
+	// Lines are handled one at a time by a worker, so that reading the keyboard never waits for
+	// the network and the person can keep typing while Waniis works.
+	go func() {
+		defer close(s.workDone)
+		for line := range s.work {
+			if s.handle(line) {
+				s.quitOnce.Do(func() { close(s.quit) })
+				return
+			}
+		}
+	}()
 	if raw {
 		return s.rawLoop()
 	}
 	return s.plainLoop()
+}
+
+// submit shows what the person typed, as their message, and hands it to the worker.
+func (s *chatSession) submit(line string) {
+	if strings.TrimSpace(line) == "" && !s.hasQuestion() {
+		s.con.Redraw()
+		return
+	}
+	if t := strings.TrimSpace(line); t != "" {
+		s.mu.Lock()
+		s.sayLocked(s.sty.Dim("›") + " " + t)
+		s.mu.Unlock()
+	}
+	select {
+	case s.work <- line:
+	case <-s.ctx.Done():
+	}
+}
+
+func (s *chatSession) hasQuestion() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.current != nil
+}
+
+// ticker redraws the status line: about ten times a second with a spinner, once a second
+// (for the elapsed time) without.
+func (s *chatSession) ticker() {
+	every := time.Second
+	if s.spinner {
+		every = 100 * time.Millisecond
+	}
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			s.frame.Add(1)
+			s.refreshStatus()
+		case <-s.tickerStop:
+			return
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
+
+// refreshStatus draws the status line (a terminal only; nothing is drawn when output is piped).
+func (s *chatSession) refreshStatus() {
+	if s.con == nil || !s.con.Raw {
+		return
+	}
+	s.con.SetStatus(s.act.Line(s.sty, int(s.frame.Load()), s.spinner))
 }
 
 func (s *chatSession) plainLoop() error {
@@ -239,14 +327,20 @@ func (s *chatSession) plainLoop() error {
 		select {
 		case <-s.ctx.Done():
 			return nil
+		case <-s.quit:
+			return nil
 		case line, ok := <-lines:
-			if !ok { // end of input: let the work finish, then leave
+			if !ok { // end of input: handle what was sent, let the work finish, then leave
+				close(s.work)
+				select {
+				case <-s.workDone:
+				case <-s.ctx.Done():
+					return nil
+				}
 				s.waitSettled()
 				return nil
 			}
-			if s.handle(line) {
-				return nil
-			}
+			s.submit(line)
 		}
 	}
 }
@@ -274,6 +368,8 @@ func (s *chatSession) rawLoop() error {
 		select {
 		case <-s.ctx.Done():
 			return nil
+		case <-s.quit:
+			return nil
 		case chunk, ok := <-chunks:
 			if !ok {
 				return nil
@@ -284,11 +380,7 @@ func (s *chatSession) rawLoop() error {
 				}
 				switch s.ed.Handle(k) {
 				case chat.Submit:
-					line := s.ed.Line
-					s.con.Redraw()
-					if s.handle(line) {
-						return nil
-					}
+					s.submit(s.ed.Line)
 				case chat.Interrupt:
 					if s.interrupt() {
 						return nil
@@ -358,6 +450,8 @@ func (s *chatSession) stopFollowing() bool {
 		s.cancelFollow()
 	}
 	s.following = false
+	s.act.Stop()
+	s.refreshStatus()
 	return was
 }
 
@@ -378,8 +472,10 @@ func (s *chatSession) startFollowing() {
 		s.mu.Lock()
 		if s.gen == gen {
 			s.following = false
+			s.act.Stop()
 		}
 		s.mu.Unlock()
+		s.refreshStatus()
 		if err != nil && ctx.Err() == nil {
 			s.dim("Lost the live connection (" + exitcode.As(err).Message + "). Send a prompt to follow again.")
 		}
@@ -387,18 +483,61 @@ func (s *chatSession) startFollowing() {
 }
 
 func (s *chatSession) onEvent(ev api.Event) error {
+	s.ensurePeople(ev)
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.st.Apply(ev)
 	if s.rend != nil {
 		s.rend.Event(ev)
 	}
 	s.watch(ev)
+	s.trackActivity(ev)
+	s.mu.Unlock()
+	s.refreshStatus()
 	return nil
 }
 
-func (s *chatSession) newRenderer(names map[string]string) *render.Renderer {
-	return render.New(s.con, s.a.renderOpts(true, names))
+// trackActivity keeps the status line going while a run is, and says what it is doing. Called
+// with s.mu held.
+func (s *chatSession) trackActivity(ev api.Event) {
+	switch ev.Type {
+	case "prompt.started":
+		s.act.Start()
+	case "run.completed", "prompt.cancelled":
+		if s.st.Idle() {
+			s.act.Stop()
+		}
+	}
+	s.act.Observe(ev)
+}
+
+// ensurePeople refreshes the session's people when an event mentions someone not known yet, so
+// the event reads "Sara" and not "someone". A person already tried is looked for again only
+// after a while.
+func (s *chatSession) ensurePeople(ev api.Event) {
+	unknown := s.people.Unknown(ev)
+	if len(unknown) == 0 {
+		return
+	}
+	s.mu.Lock()
+	id, now, fresh := s.id, s.a.Now(), false
+	for _, u := range unknown {
+		if t, ok := s.tried[u]; !ok || now.Sub(t) > 30*time.Second {
+			fresh, s.tried[u] = true, now
+		}
+	}
+	s.mu.Unlock()
+	if !fresh || id == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
+	defer cancel()
+	_ = s.a.fillPeople(ctx, s.rt, id, s.people)
+}
+
+func (s *chatSession) newRenderer() *render.Renderer {
+	o := s.a.renderOpts(true, s.people)
+	o.Chat, o.Own = true, s.own
+	return render.New(s.con, o)
 }
 
 // attach starts following a session: its last events, then live.
@@ -413,21 +552,24 @@ func (s *chatSession) attach(id string) error {
 		return err
 	}
 	s.stopFollowing()
-	names := s.a.names(ctx, s.rt, id)
+	_ = s.a.fillPeople(ctx, s.rt, id, s.people)
 	st := sessionstate.New()
 	for _, ev := range hist {
 		st.Apply(ev)
 	}
 	s.mu.Lock()
 	s.id, s.title, s.st = id, sess.Title, st
-	s.rend = s.newRenderer(names)
+	s.rend = s.newRenderer()
+	s.rend.Prime(hist)
 	s.queue, s.current, s.asked = nil, nil, map[string]bool{}
 	s.refreshPrompt()
 	s.tracked, s.runsWanted = nil, 0
 	repos := repoNames(*sess)
-	fmt.Fprintln(s.con, s.sty.Bold("Session "+id)+" "+s.sty.Dim(orDash(sess.Title)+" · "+repos+" · "+sessionURL(s.rt.Base, id)))
+	fmt.Fprintln(s.con, s.sty.Bold(orStr(sess.Title, "Session"))+" "+s.sty.Dim(repos+" · "+sessionURL(s.rt.Base, id)))
 	recent := hist[max(0, len(hist)-15):]
-	hr := render.New(s.con, s.a.renderOpts(false, names))
+	ho := s.a.renderOpts(false, s.people)
+	ho.Chat = true
+	hr := render.New(s.con, ho)
 	for _, ev := range recent {
 		hr.Event(ev)
 	}
@@ -436,7 +578,11 @@ func (s *chatSession) attach(id string) error {
 		s.enqueueApproval(ap)
 	}
 	s.askNext()
+	if st.Active != nil {
+		s.act.Start()
+	}
 	s.mu.Unlock()
+	s.refreshStatus()
 	s.startFollowing()
 	return nil
 }
@@ -450,15 +596,20 @@ func (s *chatSession) send(text string) {
 	running := s.st.Active != nil || len(s.st.Queued) > 0
 	s.mu.Unlock()
 	ctx := s.ctx
+	s.own.Expect(text)
+	s.act.Start()
+	s.refreshStatus()
 	if id == "" {
 		s.start(text)
 		return
 	}
 	res, err := s.rt.Client.SubmitPrompt(ctx, id, api.PromptCommand{Text: text, Mode: mode, Model: model}, s.a.NewKey())
 	if err != nil {
+		s.settleActivity()
 		s.fail(err)
 		return
 	}
+	s.own.Sent(res.PromptID)
 	s.mu.Lock()
 	if res.PromptID != "" {
 		s.tracked = append(s.tracked, res.PromptID)
@@ -467,9 +618,19 @@ func (s *chatSession) send(text string) {
 	}
 	s.mu.Unlock()
 	if running {
-		s.dim("A run is going: your prompt is queued behind it. /steer <text> redirects the run instead.")
+		s.dim("queued — Waniis will read it next. /steer <text> redirects the run instead.")
 	}
 	s.startFollowing()
+}
+
+// settleActivity stops the status line when nothing is going after a send that failed.
+func (s *chatSession) settleActivity() {
+	s.mu.Lock()
+	if s.st.Idle() {
+		s.act.Stop()
+	}
+	s.mu.Unlock()
+	s.refreshStatus()
 }
 
 // start creates the session from the first line.
@@ -490,14 +651,15 @@ func (s *chatSession) start(text string) {
 	}
 	created, err := s.rt.Client.CreateSession(s.ctx, in, s.a.NewKey())
 	if err != nil {
+		s.settleActivity()
 		s.fail(err)
 		return
 	}
 	s.mu.Lock()
 	s.id, s.title, s.st = created.ID, "", sessionstate.New()
-	s.rend = s.newRenderer(nil)
+	s.rend = s.newRenderer()
 	s.runsWanted = 1
-	s.sayLocked(s.sty.Dim("Started session " + created.ID + " · " + sessionURL(s.rt.Base, created.ID)))
+	s.sayLocked(s.sty.Dim("Started a session · " + sessionURL(s.rt.Base, created.ID)))
 	s.mu.Unlock()
 	s.startFollowing()
 }
@@ -727,6 +889,7 @@ func (s *chatSession) slash(line string) bool {
 		s.stopFollowing()
 		s.mu.Lock()
 		s.id, s.title, s.st, s.rend = "", "", sessionstate.New(), nil
+		s.act.Stop()
 		s.queue, s.current = nil, nil
 		s.refreshPrompt()
 		s.mu.Unlock()
@@ -749,7 +912,7 @@ func (s *chatSession) slash(line string) bool {
 		q := question{kind: "pick"}
 		for i, it := range items {
 			q.picks = append(q.picks, it.ID)
-			s.say(fmt.Sprintf("  %d  %s  %-8s %s", i+1, it.ID, orDash(it.Status), s.sty.Dim(truncate(it.Title, 50))))
+			s.say(fmt.Sprintf("  %d  %s %s", i+1, truncate(orStr(it.Title, "Untitled"), 50), s.sty.Dim("· "+orDash(it.Status)+" · "+repoNames(it))))
 		}
 		q.text = "Pick a session by number (anything else cancels)"
 		s.mu.Lock()
@@ -831,8 +994,11 @@ func (s *chatSession) slash(line string) bool {
 			s.fail(err)
 			break
 		}
+		_ = s.a.fillPeople(ctx, s.rt, id, s.people)
 		s.mu.Lock()
-		r := render.New(s.con, s.a.renderOpts(false, s.a.names(ctx, s.rt, id)))
+		lo := s.a.renderOpts(false, s.people)
+		lo.Chat = true
+		r := render.New(s.con, lo)
 		for _, ev := range evs {
 			r.Event(ev)
 		}
@@ -924,6 +1090,13 @@ func (s *chatSession) slash(line string) bool {
 		return true
 	}
 	return false
+}
+
+func orStr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func truncate(s string, n int) string { return output.Truncate(s, n) }

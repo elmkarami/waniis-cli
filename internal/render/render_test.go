@@ -47,12 +47,12 @@ func TestTranscript(t *testing.T) {
 	}
 	got := run(Options{Names: map[string]string{"usr_1": "maya"}}, events...)
 	for _, want := range []string{
-		"› prompt (maya): fix the flaky test",
-		"▶ run started (build)",
+		"› maya: fix the flaky test",
+		"▶ run started",
 		"Waniis: Looking at it.",
 		"⚙ tool github.get_file src/x.ts ✓",
 		"⛔ blocked ramp.com (GET)",
-		"⏸ needs approval: network access to ramp.com (read)",
+		"⏸ needs approval: network access to ramp.com (read) — docs",
 		"✓ checks: tests 24 passed, lint, typecheck",
 		"PR acme/api#318 opened https://github.com/acme/api/pull/318",
 		"PR #318 merged by maya",

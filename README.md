@@ -133,19 +133,21 @@ waniis sessions status ses_01abc       # one call: is it running, what stage, wh
 ```
 
 ```
-› prompt (maya): fix the flaky checkout test
-▶ run started (build)
+› maya: fix the flaky checkout test
+▶ run started
 Waniis: Looking at the retry logic in src/checkout.ts.
 ⚙ tool github.get_file src/checkout.ts ✓
 ⛔ blocked ramp.com (GET) — not allowed
-⏸ needs approval: network access to ramp.com (read) — docs; request n_1
+⏸ needs approval: network access to ramp.com (read) — docs
 ✓ checks: tests 24 passed, lint, typecheck
 PR acme/api#318 opened https://github.com/acme/api/pull/318
 ■ run completed: Fixed the race in the retry loop ($0.42)
 ```
 
 Streamed answers are joined into one line, tool calls are paired with their results, and a personal
-result you can't see is shown as a placeholder. Colors appear on a terminal unless `--no-color` or
+result you can't see is shown as a placeholder. People are shown by name (you, or their display name
+or GitHub login, or "someone"), never by id; a message that reaches the log twice is shown once, and
+a run's summary is left out when it only repeats the answer. Ids stay in `--json`. Colors appear on a terminal unless `--no-color` or
 `NO_COLOR` is set. `--timestamps` adds each event's time.
 
 `--until` ends a follow when a run ends (`run-end`), nothing is running or queued (`idle`) or a PR
@@ -189,9 +191,31 @@ waniis chat --chat    # a conversation with no repo
 ```
 
 It is a line-based chat, not a full-screen program: events stream above a prompt line using the
-same rendering as `waniis logs`. **Enter** sends a prompt; if a run is going it is queued behind it
-(a dim line says so). **`/steer <text>`** redirects the run that is going instead. The prompt shows
-the current mode and model (`build · claude-x ›`).
+same rendering as `waniis logs`. **Enter** sends a message; it stays on screen as you typed it
+(`› your words`) and is not shown a second time when the server repeats it. The prompt line is
+always live: you can keep typing, queue the next message or use a slash command while Waniis
+works, and what is streaming scrolls above what you are typing. If a run is going the message is
+queued behind it (a dim line says "queued — Waniis will read it next"); **`/steer <text>`**
+redirects the run that is going instead. The prompt shows the current mode and model
+(`build · claude-x ›`) when you set them.
+
+While Waniis works a status line sits above the prompt: a spinner, what is really happening
+("Reading acme/api…", "Searching Sentry…", "Running tests…", "Writing src/routes/checkout.ts…",
+"Opening a pull request…"), and between real updates one of Waniis's own words ("Thinking…",
+"Connecting the dots…"), with the elapsed time. It goes away when the run ends, and a run ends with
+one quiet line: `✓ done · 6s` (`✗ failed · reason`, `■ stopped`). The answer is printed once as it
+streams; the run's summary is added, labelled, only when it says something the answer didn't.
+Other people's messages read `› Sara: …`. The spinner needs a terminal with colors (a static dot
+otherwise); with piped input there is no status line and no cursor movement at all.
+
+```
+$ waniis chat --chat
+Waniis chat. Type your first message to start a session; / for commands, Ctrl-C twice to leave.
+› abcabc
+Started a session · https://app.waniis.com/s/ses_01abc
+Waniis: I see "abcabc." If you're testing the chat, it's working—what can I help you with?
+✓ done · 3s
+```
 
 Type **`/`** to open the command menu: it filters as you type, **Up/Down** pick, **Tab** completes,
 **Enter** runs the highlighted command, **Esc** closes it. `/help` lists everything.

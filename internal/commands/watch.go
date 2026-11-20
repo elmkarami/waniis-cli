@@ -41,25 +41,40 @@ func (a *app) chartsOn() bool {
 	return a.StdoutTTY
 }
 
-func (a *app) renderOpts(live bool, names map[string]string) render.Options {
-	return render.Options{Style: style.Style{On: a.colorOn()}, Width: a.termWidth(), Charts: a.chartsOn(), Live: live, Names: names}
+func (a *app) renderOpts(live bool, people *render.People) render.Options {
+	return render.Options{Style: style.Style{On: a.colorOn()}, Width: a.termWidth(), Charts: a.chartsOn(), Live: live, People: people}
 }
 
-// names maps user ids on the session to their logins, so events read "(maya)". Best effort.
-func (a *app) names(ctx context.Context, rt *conn, id string) map[string]string {
+// selfID is the signed-in person's id, "" when it can't be read (then people read "someone").
+func (a *app) selfID(ctx context.Context, rt *conn) string {
+	me, err := rt.Client.Me(ctx)
+	if err != nil {
+		return ""
+	}
+	return me.ID
+}
+
+// fillPeople adds the session's people to p: by display name, else GitHub login, never an id.
+func (a *app) fillPeople(ctx context.Context, rt *conn, id string, p *render.People) error {
 	people, err := rt.Client.People(ctx, id)
 	if err != nil {
-		return nil
+		return err
 	}
 	m := map[string]string{}
-	for _, p := range people {
-		if p.Login != "" {
-			m[p.ID] = p.Login
-		} else {
-			m[p.ID] = p.Name
+	for _, x := range people {
+		if n := render.FromPerson(x.Name, x.Login); n != "" {
+			m[x.ID] = n
 		}
 	}
-	return m
+	p.Merge(m)
+	return nil
+}
+
+// people names who is who on a session, best effort: the signed-in person reads "you".
+func (a *app) people(ctx context.Context, rt *conn, id string) *render.People {
+	p := render.NewPeople(a.selfID(ctx, rt), nil)
+	_ = a.fillPeople(ctx, rt, id, p)
+	return p
 }
 
 // writeNDJSON writes an event as one line of the API's own JSON.
@@ -85,7 +100,7 @@ func (a *app) sink(ctx context.Context, rt *conn, id string, live bool, timestam
 	if a.useJSON() {
 		return func(ev api.Event) error { return writeNDJSON(a.Out, ev) }, func() {}
 	}
-	o := a.renderOpts(live, a.names(ctx, rt, id))
+	o := a.renderOpts(live, a.people(ctx, rt, id))
 	o.Timestamps = timestamps
 	r := render.New(a.Out, o)
 	return func(ev api.Event) error { r.Event(ev); return nil }, r.Flush

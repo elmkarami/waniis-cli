@@ -375,7 +375,7 @@ func (a *app) fillLogs(ctx context.Context, rt *conn, in logsInput, out *logsOut
 	switch in.Format {
 	case "", "text":
 		var b strings.Builder
-		r := render.New(&b, render.Options{Width: 100, Names: a.names(ctx, rt, in.ID)})
+		r := render.New(&b, render.Options{Width: 100, People: a.people(ctx, rt, in.ID)})
 		for _, ev := range evs {
 			r.Event(ev)
 		}

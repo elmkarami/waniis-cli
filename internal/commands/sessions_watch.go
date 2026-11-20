@@ -212,7 +212,7 @@ func (a *app) fetchStatus(ctx context.Context, rt *conn, id string) (*api.Status
 func (a *app) writeStatus(rt *conn, id string, st *api.Status) error {
 	run := "-"
 	if st.Run != nil {
-		run = st.Run.ID
+		run = "going"
 		var bits []string
 		if st.Run.Stage != "" {
 			bits = append(bits, st.Run.Stage)

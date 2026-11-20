@@ -136,3 +136,16 @@ protocol asks; `pr.status` and chat reactions and edits are left out as noise. A
 23. **Chat attachments** are not offered: attaching needs the declare-and-upload flow
     (`POST /:id/attachments`), which the CLI doesn't have yet. `/login` inside the chat is also
     not built; `/logout` signs out and leaves.
+
+## Who is who in chat and logs
+
+The CLI never prints a user, session, run or prompt id in human output (they stay in `--json`).
+The signed-in person (`GET /v1/me`) reads "you"; others read as the `name` from
+`GET /v1/sessions/:id/people`, else their `login`, else "someone". The route answers with the id as
+`name` (and a null `login`) when it knows nothing better (`sessions.ts`); the CLI treats a name
+that is an id as no name. The people are read once when a chat or log is opened and again when an
+event mentions someone not known yet (the same person at most every 30 seconds). Your own
+messages in the chat are matched to their echoes (`chat.message`, `prompt.queued`) by the
+`promptId` of the command's reply, or by author, text and recency (two minutes), and not shown
+again; a `prompt.queued` that carries `continues` (a conversation handed to a sandbox) is the same
+message and is not shown again either.

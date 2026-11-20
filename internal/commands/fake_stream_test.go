@@ -14,11 +14,12 @@ import (
 
 // wsScript is what the fake does with one WebSocket connection, in order of connections.
 type wsScript struct {
-	status int              // reject the upgrade with this HTTP status
-	events []map[string]any // sent (those after `since`) as frames
-	frames []string         // raw frames sent before the events (presence and the like)
-	hold   bool             // keep the connection open until the client goes
-	then   []map[string]any // sent after a short pause, on a held connection
+	status int                 // reject the upgrade with this HTTP status
+	events []map[string]any    // sent (those after `since`) as frames
+	frames []string            // raw frames sent before the events (presence and the like)
+	hold   bool                // keep the connection open until the client goes
+	then   []map[string]any    // sent after a short pause, on a held connection
+	live   chan map[string]any // events a test pushes while the connection is open
 }
 
 type wsConn struct {
@@ -180,6 +181,18 @@ func (f *fake) serveStream(w http.ResponseWriter, r *http.Request, id string) {
 	}
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if sc.live != nil {
+		go func() {
+			for {
+				select {
+				case e := <-sc.live:
+					send([]map[string]any{e})
+				case <-cctx.Done():
+					return
+				}
+			}
+		}()
+	}
 	for {
 		if _, _, err := c.Read(cctx); err != nil {
 			return

@@ -77,37 +77,15 @@ func (r *Renderer) describe(ev api.Event, p map[string]any) string {
 		return st.Dim("● session archived")
 	case "session.restored":
 		return st.Dim("● session restored")
-	case "prompt.queued":
-		mode := s("mode")
-		r.promptModes[s("promptId")] = mode
-		txt := st.Bold("› prompt") + " (" + r.name(s("authorId")) + "): " + s("text")
-		if pos := num(p, "position"); pos > 0 {
-			txt += st.Dim(fmt.Sprintf("  [queued, position %d]", pos))
-		}
-		if mode == "plan" || mode == "ask" {
-			txt += st.Dim("  [" + mode + "]")
-		}
-		return txt
 	case "prompt.started":
-		if m := r.promptModes[s("promptId")]; m != "" {
-			return st.Cyan("▶ run started") + st.Dim(" ("+m+")")
+		if tag := r.promptModes[s("promptId")]; tag != "" {
+			return st.Cyan("▶ run started") + st.Dim(" ("+tag+")")
 		}
 		return st.Cyan("▶ run started")
 	case "prompt.cancelled":
 		return st.Dim("◦ prompt cancelled")
 	case "prompt.edited":
 		return st.Dim("◦ prompt edited by " + r.name(s("editedBy")))
-	case "chat.message":
-		who := r.name(s("authorId"))
-		kind := "›"
-		if s("kind") == "ask" {
-			kind = "› ask"
-		}
-		txt := st.Bold(kind) + " (" + who + "): " + s("text")
-		if b, _ := p["offRecord"].(bool); b {
-			txt += st.Dim("  [off the record]")
-		}
-		return txt
 	case "look.started":
 		return st.Dim("◦ " + s("command") + " started")
 	case "look.completed":
@@ -123,15 +101,13 @@ func (r *Renderer) describe(ev api.Event, p map[string]any) string {
 	case "run.stop_requested":
 		return st.Dim("■ stop requested by " + r.name(s("requestedBy")))
 	case "run.steered":
-		return st.Bold("↪ steer") + " (" + r.name(s("authorId")) + "): " + s("text")
-	case "run.completed":
-		return r.runCompleted(p)
+		return st.Bold("↪ "+r.name(s("authorId"))+" steered:") + " " + s("text")
 	case "run.plain_summary":
 		return st.Bold("Summary: ") + s("text")
 	case "session.continued_from":
-		return st.Dim("● continues " + s("sessionId") + ": " + oneLine(s("title"), 80))
+		return st.Dim("● continues an earlier session: " + oneLine(s("title"), 80))
 	case "session.continued_in":
-		return st.Dim("● continued in " + s("sessionId"))
+		return st.Dim("● continued in a new session")
 	case "changes.kept":
 		return st.Dim(fmt.Sprintf("◦ changes kept, not published: %s, +%d −%d", plural(num(p, "files"), "file", "files"), num(p, "additions"), num(p, "deletions")))
 	case "changes.publish_requested":
@@ -176,15 +152,15 @@ func (r *Renderer) describe(ev api.Event, p map[string]any) string {
 	case "plan.discarded":
 		return st.Dim("◦ plan discarded")
 	case "child.spawned":
-		return st.Dim("◦ child session " + s("childId") + " started: " + oneLine(s("title"), 100))
+		return st.Dim("◦ child session started: " + oneLine(s("title"), 100))
 	case "child.completed":
-		return st.Dim("◦ child session " + s("childId") + " " + s("status") + ": " + oneLine(s("summary"), 140))
+		return st.Dim("◦ child session " + s("status") + ": " + oneLine(s("summary"), 140))
 	case "error":
 		return st.Red("✗ error "+s("code")+": ") + oneLine(s("message"), 200)
 	case "mcp.tool_call":
 		return r.mcpCall(p)
 	case "mcp.approval_requested":
-		return st.Yellow("⏸ needs approval: ") + s("server") + "." + s("tool") + st.Dim(" ("+s("risk")+" tool; request "+s("requestId")+")") + argLine(obj(p, "args"))
+		return st.Yellow("⏸ needs approval: ") + s("server") + "." + s("tool") + st.Dim(" ("+s("risk")+" tool)") + argLine(obj(p, "args"))
 	case "mcp.approval_decided":
 		return st.Dim(fmt.Sprintf("▶ approval for %s.%s: %s", s("server"), s("tool"), s("decision")))
 	case "mcp.connection_needed":
@@ -193,7 +169,7 @@ func (r *Renderer) describe(ev api.Event, p map[string]any) string {
 		return st.Red("⛔ blocked ") + s("host") + " (" + s("method") + ")" + st.Dim(" — "+oneLine(s("message"), 120))
 	case "network.access_requested":
 		return st.Yellow("⏸ needs approval: ") + "network access to " + s("host") + " (" + s("access") + ")" +
-			st.Dim(" — "+oneLine(s("reason"), 120)+"; request "+s("requestId"))
+			st.Dim(" — "+oneLine(s("reason"), 120))
 	case "network.access_decided":
 		return st.Dim(fmt.Sprintf("▶ network access to %s: %s", s("host"), s("decision")))
 	case "network.host_allowed":
@@ -239,30 +215,6 @@ func (r *Renderer) sandbox(p map[string]any) string {
 		return st.Red(txt)
 	}
 	return st.Dim(txt)
-}
-
-func (r *Renderer) runCompleted(p map[string]any) string {
-	st := r.st()
-	s := str(p)
-	sum := ""
-	if x := oneLine(s("summary"), 400); x != "" {
-		sum = ": " + x
-	}
-	cost := ""
-	if c, ok := p["costUsd"].(float64); ok && c > 0 {
-		cost = st.Dim(fmt.Sprintf(" ($%.2f)", c))
-	}
-	switch s("outcome") {
-	case "success":
-		return st.Green("■ run completed") + sum + cost
-	case "failed":
-		return st.Red("■ run failed") + sum + cost
-	case "stopped":
-		return st.Yellow("■ run stopped") + sum + cost
-	case "needs_input":
-		return st.Yellow("■ run needs input") + sum + cost
-	}
-	return "■ run " + s("outcome") + sum + cost
 }
 
 func (r *Renderer) prUpdated(p map[string]any) string {
@@ -342,5 +294,5 @@ func (r *Renderer) mcpCall(p map[string]any) string {
 		mark = st.Red("denied")
 	}
 	args := argSummary(obj(p, "args"))
-	return st.Dim("⚙ tool "+strings.TrimSpace(s("server")+"."+s("tool")+" "+args)) + " " + mark + st.Dim(" ("+ms(num(p, "durationMs"))+")")
+	return st.Dim("⚙ tool "+strings.TrimSpace(DisplayToolName(s("server"))+"."+s("tool")+" "+args)) + " " + mark + st.Dim(" ("+ms(num(p, "durationMs"))+")")
 }
