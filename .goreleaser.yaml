@@ -1,0 +1,94 @@
+# GoReleaser configuration. Run by .github/workflows/release.yml on tags `v*`.
+# Check it locally with: goreleaser check
+version: 2
+project_name: waniis
+
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/completions.sh
+
+builds:
+  - id: waniis
+    main: ./cmd/waniis
+    binary: waniis
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/elmkarami/waniis-cli/internal/commands.Version={{ .Version }}
+      - -X github.com/elmkarami/waniis-cli/internal/commands.Commit={{ .ShortCommit }}
+      - -X github.com/elmkarami/waniis-cli/internal/commands.Date={{ .Date }}
+
+archives:
+  - id: waniis
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "waniis_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - completions/*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# A software bill of materials per archive (needs syft; the release workflow installs it).
+sboms:
+  - artifacts: archive
+
+# Keyless cosign signature of checksums.txt, from the release workflow's OIDC identity.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    output: true
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: elmkarami
+    name: waniis-cli
+  prerelease: auto
+
+# Homebrew formula, pushed to the tap repository elmkarami/homebrew-tap (the owner creates it).
+# Needs a separate token: GITHUB_TOKEN can't write to another repository. Set the repository
+# secret HOMEBREW_TAP_GITHUB_TOKEN (a fine-grained token with Contents: read and write on the tap).
+brews:
+  - name: waniis
+    repository:
+      owner: elmkarami
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: https://waniis.com
+    description: "Waniis from the command line: start, search, stop and share sessions, and export them"
+    license: Apache-2.0
+    commit_author:
+      name: waniis-release
+      email: noreply@waniis.com
+    install: |
+      bin.install "waniis"
+      bash_completion.install "completions/waniis.bash" => "waniis"
+      zsh_completion.install "completions/waniis.zsh" => "_waniis"
+      fish_completion.install "completions/waniis.fish"
+    test: |
+      assert_match "waniis", shell_output("#{bin}/waniis version")

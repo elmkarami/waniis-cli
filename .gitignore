@@ -1,0 +1,21 @@
+# Build output
+/bin/
+/dist/
+/completions/
+/waniis
+/waniis.exe
+*.test
+coverage.out
+
+# Local config and secrets: never commit these
+.env
+.env.*
+*.pem
+*.key
+credentials
+.waniis/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
