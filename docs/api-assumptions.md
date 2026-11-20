@@ -21,8 +21,13 @@ and `User-Agent: waniis-cli/<version> (<os>; <arch>)`. Requests and responses ar
 | `GET /v1/sessions/search` | `sessions search` | The list query plus `q` (the text) and `interpret=false` for `--no-interpret` | Same page as the list, plus `interpreted: {repos, people, status, stage, since, until, prState, text}` (G5). All its fields are optional |
 | `GET /v1/sessions/:id` | `sessions show`, after `start --wait` | | The session summary (see below) |
 | `POST /v1/sessions` | `sessions start` | `Idempotency-Key: <uuid>` and JSON `{title?, visibility?, teamId?, repos?: [{cloneUrl, branch?}], stage?: "chat", prompt: {type: "prompt.submit", text, mode?, model?, source: "cli"}}` | 201 `{id}`. Repeating the same key must return the same session and not create another (G6) |
-| `GET /v1/sessions/:id/events?since=<seq>` | `start --wait` (polls every 3 s) | | `{events: [{seq, type, payload}]}`; the CLI waits for `type: "run.completed"` with `payload.outcome` in `success`, `failed`, `stopped`, `needs_input` and `payload.summary` |
-| `POST /v1/sessions/:id/commands` | `sessions stop` | `Idempotency-Key` and JSON `{type: "run.stop"}` | 2xx `{events}` |
+| `GET /v1/sessions/:id/events` | `logs`, `wait`, `--until`, `chat`, `start --wait` (polls) | One of `?tail=N` (1 to 1000), `?since=S&limit=N` or `?before=S&limit=N` (limit 1 to 1000, default 500) | **Confirmed.** `{events, lastSeq, hasMore}`: `lastSeq` is the newest seq of the whole log, `hasMore` means older events remain for `tail` and `before`, newer for `since`. Pages go forward with the last event's seq as the next `since`. `tail` can't combine with the others (400 `invalid_query`). Private items keep their seq with `private: {hidden: true}`. The CLI also copes with an older answer of only `{events}`: it keeps the last N client side for `--tail`, and stops after one page. A `--tail` above 1000 reads the whole log and cuts it |
+| `GET /v1/sessions/:id/stream?since=<seq>` (WebSocket) | `logs -f`, `watch`, `--follow`, `chat` | `Authorization: Bearer` on the upgrade, `x-rafiiq-workspace`, and `client=cli` | **Confirmed** (bearer, `since` resume, 426 without an upgrade, 401 without auth; read-only tokens join as viewers). Frames with `seq`, `type` and `payload` are events; others (presence, metrics) are skipped. The CLI drops events at or below the last seq (the replay after a reconnect), reconnects with backoff (0.5 s doubling to 15 s), refreshes the token once on a 401 upgrade, and polls `/events` after 3 failed connections in a row. 403 and 404 on the upgrade end the follow |
+| `GET /v1/sessions/:id/status` | `sessions status`, `steer` (is a run going?), MCP `session_status` | | **Confirmed.** `{stage: chat\|working, activity: running\|idle, run: {id, promptId, mode, stage: starting\|working\|verifying\|publishing, startedAt} \| null, queued, lastRun: {id, outcome, summary, at} \| null, pullRequest: {number, url, repo?, draft} \| null, sandbox: {status, detail?} \| null, lastSeq, at}`. A 404 from this route falls back to `GET /v1/sessions/:id` (a real 404 stops there) plus the latest 300 events folded into the same shape |
+| `POST /v1/sessions/:id/commands` | `sessions stop` (`run.stop`), `prompt` (`prompt.submit`), `steer` (`run.steer`), `chat` (`tool.approval.decide`) | `Idempotency-Key` (reused across retries) and JSON: `{type: "prompt.submit", text, mode?, model?, source: "cli"}`, `{type: "run.steer", text}`, `{type: "run.stop"}`, `{type: "tool.approval.decide", requestId, decision: once\|session\|deny, source: "cli"}` | **Confirmed.** 200 `{events, promptId?, runId?}`: `promptId` from `prompt.queued`, `runId` from `prompt.started` (absent when the run starts asynchronously) or `run.steered`. The queue position is read from the `prompt.queued` event. The CLI follows its prompt's run through the stream (`prompt.started` links the prompt to a run). A read-only token gets 403 `insufficient_scope` (exit 3). The server has no dedicated "no active run" code, so `steer` checks `/status` first and, if that says idle, tells the person to use `prompt` without sending anything; any other 4xx about the steer becomes the same advice |
+| `POST /v1/sessions/:id/network/access` | `chat` | `{kind: "decide", requestId, decision: approve\|deny, scope: "session"}` or `{kind: "allow", host, scope: "session", access: "read", retry: true}` | As in `session-network-access.ts`: who may decide is the server's call. A 403 is shown as "you can't decide that here" and the chat stops asking about blocked hosts |
+| `GET /v1/sessions/:id/surfaces`, `GET /:id/surfaces/:slug/open` | `chat /preview` | slug `p<port>` | The 302's `Location` (a one-time, 60-second ticket link) is printed, never followed |
+| `GET /v1/sessions/:id/diff` | `chat /diff` | | Files, additions, deletions and PR per repo (patches are ignored), plus the gaps the server reports |
 | `PUT /v1/sessions/:id/share-link` | `share --link` | JSON `{role: "viewer" \| "collaborator"}` | `{link: {role, url, createdAt}}` |
 | `DELETE /v1/sessions/:id/share-link` | `share --revoke-link` | | 2xx |
 | `GET /v1/sessions/:id/people` | `share --remove` (login to id) | | `{people: [{id, login, name, role}]}` |
@@ -87,7 +92,7 @@ generated once per command and reused for every attempt.
 11. **First prompt in `POST /v1/sessions`** (G6) is a `prompt` object that is a protocol
     `prompt.submit` command with `source: "cli"`, so the server can validate it with the same
     schema.
-12. **`--wait`** detects the end of the first run with `run.completed` events (polling `events`,
+12. **`start --wait`** detects the end of the first run with `run.completed` events (polling `events`,
     not the WebSocket stream). `needs_input` counts as a finished run with exit 0.
 13. **Repository clone URL** is built as `https://github.com/<owner>/<name>.git`, which is the
     form the API's `cloneUrl` takes. Only GitHub repos are recognized.
@@ -100,3 +105,34 @@ generated once per command and reused for every attempt.
     pullRequestNumber, pullRequestUrl, visibility, createdAt, lastActiveAt, url`.
 17. **Config file**: none in phase A. Flags and environment only (no `config.toml`, no profiles).
 18. **Telemetry, version headers (G10)** are not implemented.
+
+## Watching, steering, the chat and MCP (added with `logs`, `prompt`, `steer`, `wait`, `chat`, `mcp`)
+
+Events are read from the protocol's frames (FND-05): `{v, seq, at, actor, private?, type, payload}`.
+Types the CLI renders: `session.*`, `prompt.*`, `chat.message`, `sandbox.status`,
+`agent.message(.delta)`, `agent.retrying`, `model.fallback`, `tool.call`/`tool.result`,
+`file.changed`, `run.*`, `changes.*`, `pr.opened`/`pr.updated`/`pr.follow_up`, `verification.*`,
+`review.*`, `plan.*`, `child.*`, `error`, `mcp.*`, `sandbox.egress_blocked`, `network.*`,
+`environment.*`, `guardrails.escalated`, `engineer_review.*`. Unknown types are ignored, as the
+protocol asks; `pr.status` and chat reactions and edits are left out as noise. A run "starts" at
+`prompt.started` and ends at `run.completed` (`success`, `failed`, `stopped`, `needs_input`).
+
+19. **`--until` and `wait`** are decided on the log folded from the whole session (read in pages of
+    500), then on live events. `run-end`: when a run is going or a prompt is queued, the next
+    `run.completed`; with nothing going, at once with the last outcome. `idle`: nothing running and
+    nothing queued. `pr-open`: a `pr.opened` was seen (earlier or later); if the session goes idle
+    first, exit 10 for a failed run, else exit 1 (`no_pull_request`). `prompt --wait` ends with that
+    prompt's own run. Outcomes `failed` and `stopped` exit 10; `success` and `needs_input` exit 0.
+20. **Names in lines** (`› prompt (maya)`) come from `GET /:id/people` (`id` to `login`), best
+    effort: without it the user id is printed.
+21. **Chart blocks** follow `packages/protocol/src/answer-chart.ts` (kinds `bar`, `stacked_bar`,
+    `line`, `area`; the same limits and validation, mirrored in `internal/chart`). The table matches
+    the Slack bot's (a blank first header, then the series; values formatted en-US like
+    `formatChartValue`); the currency code or the plain unit follows the title. A block that doesn't
+    validate is printed as the code block it was.
+22. **MCP** uses `github.com/modelcontextprotocol/go-sdk` v1.3.1 (the newest that builds with
+    Go 1.24; v1.4 and later need 1.25). Write tools are on by default, including `stop_session`;
+    `--read-only` removes them. There is no publish, delete or admin tool (spec CLT-15/FR-22; open question CLI6).
+23. **Chat attachments** are not offered: attaching needs the declare-and-upload flow
+    (`POST /:id/attachments`), which the CLI doesn't have yet. `/login` inside the chat is also
+    not built; `/logout` signs out and leaves.
