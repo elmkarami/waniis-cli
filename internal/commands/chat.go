@@ -378,9 +378,17 @@ func (s *chatSession) rawLoop() error {
 				if k.Kind != chat.KeyCtrlC {
 					s.resetCtrlC()
 				}
-				switch s.ed.Handle(k) {
+				// The footer is redrawn from the stream's goroutine too: change the input line under
+				// the console's lock.
+				var res chat.Result
+				var line string
+				s.con.Edit(func() {
+					res = s.ed.Handle(k)
+					line = s.ed.Line
+				})
+				switch res {
 				case chat.Submit:
-					s.submit(s.ed.Line)
+					s.submit(line)
 				case chat.Interrupt:
 					if s.interrupt() {
 						return nil

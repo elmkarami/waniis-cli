@@ -98,6 +98,15 @@ func (c *Console) clear() {
 	c.drawn, c.above = false, 0
 }
 
+// Edit runs fn while holding the console's lock: the input line (Ed) is read when the footer is
+// drawn, which can happen from the stream's goroutine at any time, so every change to it from the
+// key-reading goroutine goes through here.
+func (c *Console) Edit(fn func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	fn()
+}
+
 // SetStatus sets the live status line (already styled, no newline); "" removes it.
 func (c *Console) SetStatus(line string) {
 	c.mu.Lock()
