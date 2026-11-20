@@ -246,10 +246,10 @@ func linePlot(c *Chart, st style.Style, width int) []string {
 		}
 		var b strings.Builder
 		for _, ce := range grid[r] {
-			switch {
-			case ce.r == 0:
+			switch ce.r {
+			case 0:
 				b.WriteByte(' ')
-			case ce.r == '·' || ce.r == '░':
+			case '·', '░':
 				b.WriteString(st.Dim(string(ce.r)))
 			default:
 				b.WriteString(st.Series(ce.series, string(ce.r)))

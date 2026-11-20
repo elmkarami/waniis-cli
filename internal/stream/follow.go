@@ -37,8 +37,8 @@ type Options struct {
 	PingEvery time.Duration
 }
 
-// Stop is returned by a handler to end the follow cleanly.
-var Stop = errors.New("stop following")
+// ErrStop is returned by a handler to end the follow cleanly.
+var ErrStop = errors.New("stop following")
 
 func (o *Options) defaults() {
 	if o.Backoff == nil {
@@ -65,7 +65,7 @@ func (o *Options) defaults() {
 }
 
 // Follow delivers every event after o.Since to handle, in order, until handle returns an error
-// (Stop ends it cleanly: Follow then returns nil), ctx ends, or a failure that retrying can't
+// (ErrStop ends it cleanly: Follow then returns nil), ctx ends, or a failure that retrying can't
 // fix (not signed in, no access) happens.
 func Follow(ctx context.Context, c *api.Client, id string, o Options, handle func(api.Event) error) error {
 	o.defaults()
@@ -81,7 +81,7 @@ func Follow(ctx context.Context, c *api.Client, id string, o Options, handle fun
 	for {
 		got, err := runSocket(ctx, c, id, &last, o, deliver)
 		switch {
-		case errors.Is(err, Stop):
+		case errors.Is(err, ErrStop):
 			return nil
 		case err == nil || ctx.Err() == nil && !isFatal(err):
 		default:
@@ -181,7 +181,7 @@ func runSocket(ctx context.Context, c *api.Client, id string, last *int, o Optio
 		}
 		return false, err
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(32 << 20)
 
 	pctx, stopPing := context.WithCancel(ctx)
@@ -198,7 +198,7 @@ func runSocket(ctx context.Context, c *api.Client, id string, last *int, o Optio
 				err := conn.Ping(pc)
 				cancel()
 				if err != nil {
-					conn.CloseNow()
+					_ = conn.CloseNow()
 					return
 				}
 			}
@@ -217,8 +217,8 @@ func runSocket(ctx context.Context, c *api.Client, id string, last *int, o Optio
 			continue // presence, metrics and other frames are not events
 		}
 		if err := deliver(ev); err != nil {
-			conn.Close(websocket.StatusNormalClosure, "")
-			if errors.Is(err, Stop) {
+			_ = conn.Close(websocket.StatusNormalClosure, "")
+			if errors.Is(err, ErrStop) {
 				return got, err
 			}
 			return got, fatalError{err}
@@ -257,7 +257,7 @@ func poll(ctx context.Context, c *api.Client, id string, last *int, o Options, d
 			}
 			for _, ev := range page.Events {
 				if err := deliver(ev); err != nil {
-					if errors.Is(err, Stop) {
+					if errors.Is(err, ErrStop) {
 						return nil
 					}
 					return err

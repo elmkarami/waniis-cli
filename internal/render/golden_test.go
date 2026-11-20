@@ -25,7 +25,7 @@ func golden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatalf("missing golden %s (run with -update): %v", path, err)
 	}
-	if string(want) != got {
+	if strings.ReplaceAll(string(want), "\r\n", "\n") != got {
 		t.Fatalf("%s differs.\n--- got ---\n%s\n--- want ---\n%s", name, got, string(want))
 	}
 }

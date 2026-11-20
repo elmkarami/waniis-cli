@@ -110,6 +110,35 @@ waniis export sessions --format xlsx --since 2026-11-01 --output sessions.xlsx
 `sessions start` always sends an `Idempotency-Key`, so retrying after a network error or a 5xx never
 starts a second session. Pass `--idempotency-key` to choose the key yourself.
 
+## Waniis for AI agents (`waniis mcp`)
+
+`waniis mcp` runs a Model Context Protocol server on stdio with the CLI's stored credentials
+(or `WANIIS_TOKEN`), so an agent can hand work to Waniis, watch it and read the result.
+
+```sh
+claude mcp add waniis -- waniis mcp                 # Claude Code
+codex mcp add waniis -- waniis mcp                  # Codex CLI
+```
+
+Cursor: add `{"mcpServers": {"waniis": {"command": "waniis", "args": ["mcp"]}}}` to
+`~/.cursor/mcp.json`. Any MCP client that can start a stdio command works the same way. Sign in
+once with `waniis login` first; a missing sign-in comes back as a tool error that says so.
+
+| Tool | What it does |
+|---|---|
+| `list_sessions` | Sessions you can see (status, repo, author, PR filters) |
+| `search_sessions` | The same in plain language |
+| `start_session` | Start work on a repo (or `chat`), optionally `wait` for the first run |
+| `session_status` | Running or idle, current run and stage, queue, last outcome, PR, sandbox |
+| `session_logs` | The last N events as readable lines, or events after a `since` seq (`lastSeq` to continue) |
+| `prompt_session` | Append a prompt (queued if a run is going), optionally `wait` for its run |
+| `steer_session` | Steer the run that is going (fails clearly if nothing runs) |
+| `stop_session` | Stop the running work |
+| `wait_session` | Block until `run-end`, `idle` or `pr-open`; a timeout is reported as `timedOut`, call again |
+
+`--read-only` offers only the tools that change nothing. A run that failed is a normal result
+(`outcome: "failed"`), not a tool error.
+
 ## Output
 
 Tables on stdout for people; `--json` for machines. Errors always go to stderr, so stdout holds

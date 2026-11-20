@@ -213,7 +213,7 @@ func (a *app) follow(ctx context.Context, rt *conn, spec followSpec) error {
 		}
 		if ok, err := spec.Cond.done(spec.State); ok {
 			result = err
-			return stream.Stop
+			return stream.ErrStop
 		}
 		return nil
 	})

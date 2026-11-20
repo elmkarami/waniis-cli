@@ -134,7 +134,7 @@ browser sign-in (waniis login) or a personal token (WANIIS_TOKEN).`,
 		topLevel(a.sessionsStartCmd(), "new \"<prompt>\""),
 		topLevel(a.sessionsListCmd(), "ls"),
 		topLevel(a.sessionsLogsCmd(), "logs <id>"),
-		a.watchCmd(),
+		a.watchCmd(), a.mcpCmd(),
 	)
 	root.AddCommand(a.authCmd())
 	root.InitDefaultCompletionCmd()

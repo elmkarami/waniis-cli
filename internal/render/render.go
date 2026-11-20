@@ -69,21 +69,6 @@ func (r *Renderer) name(id string) string {
 	return id
 }
 
-func (r *Renderer) actor(ev api.Event) string {
-	if ev.Actor == nil {
-		return ""
-	}
-	switch ev.Actor.Kind {
-	case "user":
-		return r.name(ev.Actor.ID)
-	case "agent", "system":
-		return "Waniis"
-	case "integration":
-		return ev.Actor.Name
-	}
-	return ""
-}
-
 func (r *Renderer) mdOpts() MDOptions {
 	return MDOptions{Style: r.o.Style, Width: r.o.Width - 8, Draw: r.o.Charts}
 }
