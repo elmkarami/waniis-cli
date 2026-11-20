@@ -5,7 +5,6 @@ package sessionstate
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/elmkarami/waniis-cli/internal/api"
 )
@@ -35,12 +34,17 @@ type State struct {
 	Runs        int // run.completed seen
 	PRsOpened   int // pr.opened seen
 	Archived    bool
-	Proposal    string // an open "work in a sandbox?" proposal id
+	Proposal    string            // an open "work in a sandbox?" proposal id
+	RunOf       map[string]string // prompt id to the run it started
+	Outcomes    map[string]*api.OutcomeStatus
+	Cancelled   map[string]bool
 	modeByPrmpt map[string]string
 }
 
 // New returns an empty state.
-func New() *State { return &State{modeByPrmpt: map[string]string{}} }
+func New() *State {
+	return &State{modeByPrmpt: map[string]string{}, RunOf: map[string]string{}, Outcomes: map[string]*api.OutcomeStatus{}, Cancelled: map[string]bool{}}
+}
 
 // Idle is true when nothing is running and nothing is queued.
 func (s *State) Idle() bool { return s.Active == nil && len(s.Queued) == 0 }
@@ -97,6 +101,7 @@ func (s *State) Apply(ev api.Event) {
 		}
 		decode(ev, &p)
 		s.dequeue(p.PromptID)
+		s.RunOf[p.PromptID] = p.RunID
 		s.Active = &Run{ID: p.RunID, Mode: s.modeByPrmpt[p.PromptID], Stage: "starting"}
 	case "prompt.cancelled":
 		var p struct {
@@ -104,6 +109,7 @@ func (s *State) Apply(ev api.Event) {
 		}
 		decode(ev, &p)
 		s.dequeue(p.PromptID)
+		s.Cancelled[p.PromptID] = true
 	case "run.accepted":
 		s.setStage("working")
 	case "tool.call", "agent.message.delta", "agent.message":
@@ -128,7 +134,8 @@ func (s *State) Apply(ev api.Event) {
 		var rc api.RunCompleted
 		decode(ev, &rc)
 		s.Runs++
-		s.Last = &api.OutcomeStatus{RunID: rc.RunID, Outcome: rc.Outcome, Summary: rc.Summary, At: ev.At}
+		s.Last = &api.OutcomeStatus{ID: rc.RunID, Outcome: rc.Outcome, Summary: rc.Summary, At: ev.At}
+		s.Outcomes[rc.RunID] = s.Last
 		s.Active = nil
 	case "pr.opened":
 		var p struct {
@@ -225,28 +232,30 @@ func (s *State) upsertPR(p api.PRStatus) {
 	s.PRs = append(s.PRs, p)
 }
 
-// Status renders the state as the status answer. summary supplies what events can't: the
-// session's own status word and title; empty keeps the derived ones.
-func (s *State) Status(id, title, status string) *api.Status {
-	st := &api.Status{ID: id, Title: title, Status: status, Stage: s.Stage, QueuedPrompts: len(s.Queued),
-		LastOutcome: s.Last, PullRequests: s.PRs, Approvals: s.Approvals, Sandbox: s.Sandbox, LastSeq: s.LastSeq}
-	if st.PullRequests == nil {
-		st.PullRequests = []api.PRStatus{}
+// Status renders the state as the status answer, the shape of GET /status.
+func (s *State) Status() *api.Status {
+	out := &api.Status{Stage: s.Stage, Activity: "idle", Queued: len(s.Queued), LastRun: s.Last, LastSeq: s.LastSeq}
+	if out.Stage == "" {
+		out.Stage = "working"
 	}
 	if s.Active != nil {
-		st.Run = &api.RunStatus{RunID: s.Active.ID, Mode: s.Active.Mode, Stage: s.Active.Stage}
-	}
-	if st.Status == "" {
-		switch {
-		case s.Active != nil:
-			st.Status = "running"
-		case strings.EqualFold(s.Sandbox, "error"):
-			st.Status = "failed"
-		case s.Sandbox == "idle" || s.Sandbox == "terminated":
-			st.Status = "sleeping"
-		default:
-			st.Status = "idle"
+		out.Activity = "running"
+		out.Run = &api.RunStatus{ID: s.Active.ID, Mode: s.Active.Mode, Stage: s.Active.Stage}
+		for p, r := range s.RunOf {
+			if r == s.Active.ID {
+				out.Run.PromptID = p
+			}
+		}
+		if out.Run.Stage == "waiting" {
+			out.Run.Stage = "working"
 		}
 	}
-	return st
+	if len(s.PRs) > 0 {
+		pr := s.PRs[len(s.PRs)-1]
+		out.PullRequest = &pr
+	}
+	if s.Sandbox != "" {
+		out.Sandbox = &api.SandboxStatus{Status: s.Sandbox}
+	}
+	return out
 }

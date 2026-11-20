@@ -47,8 +47,8 @@ func TestFold(t *testing.T) {
 	if !s.Idle() || s.PRs[0].State != "merged" || s.LastSeq != 10 {
 		t.Fatalf("%+v", s)
 	}
-	st := s.Status("ses_1", "", "")
-	if st.Status != "idle" || st.Run != nil || st.LastOutcome.Summary != "ok" {
+	st := s.Status()
+	if st.Activity != "idle" || st.Run != nil || st.LastRun.Summary != "ok" {
 		t.Fatalf("%+v", st)
 	}
 }

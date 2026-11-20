@@ -30,7 +30,8 @@ func (a *app) sessionsCmd() *cobra.Command {
 		Short:   "Start, list, search, stop, share and open sessions",
 	}
 	c.AddCommand(a.sessionsListCmd(), a.sessionsShowCmd(), a.sessionsStartCmd(), a.sessionsStopCmd(),
-		a.sessionsSearchCmd(), a.sessionsShareCmd(), a.sessionsOpenCmd())
+		a.sessionsSearchCmd(), a.sessionsShareCmd(), a.sessionsOpenCmd(),
+		a.sessionsLogsCmd(), a.sessionsStatusCmd(), a.sessionsPromptCmd(), a.sessionsSteerCmd(), a.sessionsWaitCmd())
 	return c
 }
 
@@ -397,7 +398,7 @@ func (a *app) readPrompt(arg string) (string, error) {
 func (a *app) sessionsStartCmd() *cobra.Command {
 	var repos []string
 	var branch, mode, model, visibility, team, title, key string
-	var chat, wait bool
+	var chat, wait, follow bool
 	var waitTimeout time.Duration
 	c := &cobra.Command{
 		Use:     "start \"<prompt>\"",
@@ -409,10 +410,12 @@ be "-" to read it from stdin.
 
 Every start sends an Idempotency-Key, so a retry after a network error never starts two sessions.
 --wait blocks until the first run ends; the exit code is 0 when it succeeded and 10 when it failed
-or was stopped.`,
+or was stopped. --follow streams the first run (with --json: its events, one per line) and ends
+the same way.`,
 		Example: `  waniis sessions start "fix the flaky checkout test" --repo acme/api
   waniis sessions start --chat "how does the billing webhook retry?"
-  waniis sessions start "bump deps" --repo acme/api --wait --json`,
+  waniis sessions start "bump deps" --repo acme/api --wait --json
+  waniis new "fix the flaky checkout test" --follow`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			text, err := a.readPrompt(args[0])
@@ -432,6 +435,9 @@ or was stopped.`,
 			}
 			if visibility == "team" && team == "" {
 				return exitcode.Usagef("--visibility team needs --team")
+			}
+			if wait && follow {
+				return exitcode.Usagef("use --wait or --follow, not both")
 			}
 			if chat && len(repos) > 0 {
 				return exitcode.Usagef("--chat starts a conversation with no repo; drop --repo or --chat")
@@ -461,10 +467,26 @@ or was stopped.`,
 				return err
 			}
 			result := &startResult{ID: created.ID, URL: sessionURL(rt.Base, created.ID)}
-			if !a.useJSON() {
+			if !a.useJSON() || follow {
 				fmt.Fprintf(a.Err, "Started session %s\n", created.ID)
 			}
 			var runErr error
+			if follow {
+				fmt.Fprintln(a.Err, sessionURL(rt.Base, created.ID))
+				st, ferr := a.waitFor(cmd.Context(), rt, created.ID, waitSpec{Until: untilRunEnd, ExpectRun: true, Print: true, Timeout: waitTimeout})
+				if ferr != nil && exitcode.Of(ferr) != exitcode.RunFailed {
+					return ferr
+				}
+				if st != nil && st.Last != nil {
+					result.Outcome, result.Summary = st.Last.Outcome, st.Last.Summary
+				}
+				if !a.useJSON() {
+					if s, err := rt.Client.GetSession(cmd.Context(), created.ID); err == nil && s.PullRequest != nil {
+						fmt.Fprintf(a.Out, "Pull request: %s\n", s.PullRequest.URL)
+					}
+				}
+				return ferr
+			}
 			if wait {
 				runErr = a.waitForRun(cmd.Context(), rt, result, waitTimeout)
 				if s, err := rt.Client.GetSession(cmd.Context(), created.ID); err == nil {
@@ -488,6 +510,7 @@ or was stopped.`,
 	fl.StringVar(&title, "title", "", "session title")
 	fl.StringVar(&key, "idempotency-key", "", "key that makes retries safe (default: a random one)")
 	fl.BoolVar(&wait, "wait", false, "wait for the first run to end")
+	fl.BoolVar(&follow, "follow", false, "stream the first run until it ends")
 	fl.DurationVar(&waitTimeout, "wait-timeout", 30*time.Minute, "give up waiting after this long (exit 8)")
 	return c
 }

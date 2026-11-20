@@ -78,30 +78,37 @@ func (c *Client) Steer(ctx context.Context, id, text, key string) (*CommandResul
 
 // RunStatus is the current run in a Status.
 type RunStatus struct {
-	RunID     string `json:"runId"`
+	ID        string `json:"id"`
+	PromptID  string `json:"promptId,omitempty"`
 	Mode      string `json:"mode,omitempty"`
-	Stage     string `json:"stage,omitempty"`
+	Stage     string `json:"stage,omitempty"` // starting, working, verifying, publishing
 	StartedAt string `json:"startedAt,omitempty"`
 }
 
 // OutcomeStatus is how the last run ended.
 type OutcomeStatus struct {
-	RunID   string `json:"runId,omitempty"`
+	ID      string `json:"id,omitempty"`
 	Outcome string `json:"outcome"`
 	Summary string `json:"summary,omitempty"`
 	At      string `json:"at,omitempty"`
 }
 
-// PRStatus is one pull request of a session.
+// PRStatus is a session's pull request.
 type PRStatus struct {
 	Repo   string `json:"repo,omitempty"`
 	Number int    `json:"number"`
 	URL    string `json:"url"`
-	State  string `json:"state,omitempty"`
-	Draft  bool   `json:"draft,omitempty"`
+	Draft  bool   `json:"draft"`
+	State  string `json:"state,omitempty"` // only in what the CLI derives itself
 }
 
-// ApprovalStatus is something waiting for a person.
+// SandboxStatus is the sandbox's state.
+type SandboxStatus struct {
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// ApprovalStatus is something waiting for a person (derived from the events by the CLI).
 type ApprovalStatus struct {
 	Kind      string `json:"kind"` // tool or network
 	RequestID string `json:"requestId"`
@@ -109,57 +116,23 @@ type ApprovalStatus struct {
 	ExpiresAt string `json:"expiresAt,omitempty"`
 }
 
-// Status is the one-call answer of GET /v1/sessions/:id/status (assumed shape, see
-// docs/api-assumptions.md). When the server has no such route the CLI derives the same
-// shape from the session and its latest events.
+// Status is GET /v1/sessions/:id/status:
+// {stage, activity, run, queued, lastRun, pullRequest, sandbox, lastSeq, at}. When the server
+// has no such route the CLI derives the same shape from the session's latest events.
 type Status struct {
-	ID            string           `json:"id"`
-	Title         string           `json:"title,omitempty"`
-	Status        string           `json:"status"` // running, idle, sleeping, failed
-	Stage         string           `json:"stage,omitempty"`
-	Run           *RunStatus       `json:"currentRun"`
-	QueuedPrompts int              `json:"queuedPrompts"`
-	LastOutcome   *OutcomeStatus   `json:"lastOutcome"`
-	PullRequests  []PRStatus       `json:"pullRequests"`
-	Approvals     []ApprovalStatus `json:"pendingApprovals,omitempty"`
-	Sandbox       string           `json:"sandbox,omitempty"`
-	LastSeq       int              `json:"lastSeq"`
+	Stage       string         `json:"stage"`    // chat or working
+	Activity    string         `json:"activity"` // running or idle
+	Run         *RunStatus     `json:"run"`
+	Queued      int            `json:"queued"`
+	LastRun     *OutcomeStatus `json:"lastRun"`
+	PullRequest *PRStatus      `json:"pullRequest"`
+	Sandbox     *SandboxStatus `json:"sandbox"`
+	LastSeq     int            `json:"lastSeq"`
+	At          string         `json:"at,omitempty"`
 }
 
-// UnmarshalJSON accepts queuedPrompts as a count or a list, and a sandbox as a string or
-// an object with a status.
-func (s *Status) UnmarshalJSON(b []byte) error {
-	type plain Status
-	aux := struct {
-		*plain
-		Queued  json.RawMessage `json:"queuedPrompts"`
-		Sandbox json.RawMessage `json:"sandbox"`
-	}{plain: (*plain)(s)}
-	if err := json.Unmarshal(b, &aux); err != nil {
-		return err
-	}
-	var n int
-	var list []json.RawMessage
-	switch {
-	case json.Unmarshal(aux.Queued, &n) == nil:
-		s.QueuedPrompts = n
-	case json.Unmarshal(aux.Queued, &list) == nil:
-		s.QueuedPrompts = len(list)
-	}
-	var str string
-	var obj struct {
-		Status string `json:"status"`
-	}
-	switch {
-	case json.Unmarshal(aux.Sandbox, &str) == nil:
-		s.Sandbox = str
-	case json.Unmarshal(aux.Sandbox, &obj) == nil:
-		s.Sandbox = obj.Status
-	}
-	return nil
-}
-
-// GetStatus is GET /v1/sessions/:id/status.
+// GetStatus is GET /v1/sessions/:id/status; the raw JSON is returned too, so --json passes
+// every field through.
 func (c *Client) GetStatus(ctx context.Context, id string) (*Status, json.RawMessage, error) {
 	var raw json.RawMessage
 	if _, err := c.Do(ctx, Request{Method: http.MethodGet, Path: "/v1/sessions/" + url.PathEscape(id) + "/status"}, &raw); err != nil {
@@ -168,9 +141,6 @@ func (c *Client) GetStatus(ctx context.Context, id string) (*Status, json.RawMes
 	var st Status
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return nil, nil, err
-	}
-	if st.ID == "" {
-		st.ID = id
 	}
 	return &st, raw, nil
 }

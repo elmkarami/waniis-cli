@@ -56,10 +56,24 @@ type fake struct {
 	events         map[string][]map[string]any
 	missing        map[string]bool // session ids that 404
 	people         []map[string]any
+
+	// watching and steering
+	ws               map[string][]wsScript
+	conns            []wsConn
+	status           map[string]map[string]any
+	legacyEvents     bool
+	commands         []recorded
+	cmdReplies       map[string]map[string]any
+	promptSeq        int
+	noRun            bool
+	running          map[string]bool
+	networkForbidden bool
+	failCommands     []int
 }
 
 func newFake(t *testing.T) *fake {
-	f := &fake{t: t, validToken: testPAT, created: map[string]string{}, events: map[string][]map[string]any{}, missing: map[string]bool{},
+	f := &fake{t: t, validToken: testPAT, created: map[string]string{}, events: map[string][]map[string]any{}, ws: map[string][]wsScript{}, status: map[string]map[string]any{},
+		cmdReplies: map[string]map[string]any{}, running: map[string]bool{}, missing: map[string]bool{},
 		me: map[string]any{"id": "usr_1", "login": "maya", "name": "Maya L",
 			"workspaces": []map[string]any{{"id": "ws_1", "name": "Maya L", "kind": "personal"}}}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
@@ -265,6 +279,9 @@ func (f *fake) sessionRoute(w http.ResponseWriter, r *http.Request, body map[str
 	sub := ""
 	if len(parts) > 1 {
 		sub = strings.Join(parts[1:], "/")
+	}
+	if f.extraRoute(w, r, id, sub, body) {
+		return
 	}
 	switch {
 	case r.Method == "GET" && sub == "":

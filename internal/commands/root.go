@@ -47,6 +47,8 @@ type Deps struct {
 	Hostname  func() string
 	// PollInterval is how often --wait checks the session.
 	PollInterval time.Duration
+	// TermWidth is the terminal's width in columns; nil or 0 means 80.
+	TermWidth func() int
 	// RetryDelay overrides the API client's base retry delay when non-zero.
 	RetryDelay time.Duration
 }
@@ -77,6 +79,7 @@ type globals struct {
 	NoColor   bool
 	Verbose   bool
 	Timeout   time.Duration
+	Charts    string
 }
 
 // app is the state shared by a command tree: the dependencies and the parsed global flags.
@@ -105,7 +108,7 @@ browser sign-in (waniis login) or a personal token (WANIIS_TOKEN).`,
 		DisableAutoGenTag: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			a.started = true
-			return nil
+			return oneOf("charts", a.g.Charts, []string{"auto", "always", "never"})
 		},
 	}
 	root.SetOut(d.Out)
@@ -118,12 +121,20 @@ browser sign-in (waniis login) or a personal token (WANIIS_TOKEN).`,
 	pf.BoolVar(&a.g.NoColor, "no-color", false, "disable colored output (also NO_COLOR)")
 	pf.BoolVar(&a.g.Verbose, "verbose", false, "log requests to stderr (tokens are redacted)")
 	pf.DurationVar(&a.g.Timeout, "timeout", 30*time.Second, "timeout for each API request")
+	pf.StringVar(&a.g.Charts, "charts", "auto", "draw charts in answers: auto (on a terminal), always or never; a table is always shown")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return exitcode.Usagef("%s", err.Error()).WithHint("Run the command with --help for its usage.")
 	})
 	root.AddCommand(
 		a.loginCmd(), a.logoutCmd(), a.whoamiCmd(),
 		a.sessionsCmd(), a.exportCmd(), a.versionCmd(),
+	)
+	// The most used session commands also at the top level (CLT-15/FR-8).
+	root.AddCommand(
+		topLevel(a.sessionsStartCmd(), "new \"<prompt>\""),
+		topLevel(a.sessionsListCmd(), "ls"),
+		topLevel(a.sessionsLogsCmd(), "logs <id>"),
+		a.watchCmd(),
 	)
 	root.AddCommand(a.authCmd())
 	root.InitDefaultCompletionCmd()
@@ -191,3 +202,10 @@ func (a *app) newClient(authenticated bool) (*conn, error) {
 }
 
 func (a *app) interactive() bool { return a.StdinTTY && a.StdoutTTY && a.Getenv("CI") == "" }
+
+// topLevel turns a sessions subcommand into a top-level shortcut.
+func topLevel(c *cobra.Command, use string) *cobra.Command {
+	c.Use = use
+	c.Aliases = nil
+	return c
+}
