@@ -140,7 +140,11 @@ func (a *app) upgradeCmd() *cobra.Command {
 				}
 				return fmt.Errorf("replacing %s: %w", exe, err)
 			}
-			fmt.Fprintf(a.Out, "Upgraded waniis %s → %s (checksum verified).\n", Version, rel.Version())
+			verb := "Upgraded"
+			if !newer {
+				verb = "Installed"
+			}
+			fmt.Fprintf(a.Out, "%s waniis %s → %s (checksum verified).\n", verb, Version, rel.Version())
 			return nil
 		},
 	}
