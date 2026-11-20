@@ -4,6 +4,21 @@ What changed in each release of `waniis`. The newest is first. A release's notes
 its section here, so every version needs one before it can be released (the Release workflow
 checks).
 
+## v0.1.4 — 2026-11-20
+
+### Added
+
+- **A welcome when the chat starts**: the Waniis mark in pixel art (the W in your terminal's
+  own color, the dot in Waniis orange) beside the version, the model, the workspace, the folder
+  and its repo; under it, anything worth knowing (a new version, no git repo here).
+- **The mode under the input**: `►► auto mode (shift+tab to cycle)`. Shift+Tab moves through
+  auto, build, plan and ask; the chosen model shows there too.
+
+### Changed
+
+- The input line is just `›` now; the mode and model moved to the line under it.
+- `waniis upgrade` says "Installed", not "Upgraded", when going to an older version.
+
 ## v0.1.3 — 2026-11-20
 
 ### Added

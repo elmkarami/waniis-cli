@@ -20,6 +20,9 @@ type Console struct {
 	Raw    bool
 	Width  func() int
 	Prompt func() string // the prompt text, plain
+	// Footer is a line under the input (the mode), shown when no menu is open; nil or "": none.
+	// It is called with the console's lock held.
+	Footer func() string
 	Ed     *Editor
 	Bold   func(string) string // styling for the selected menu item; nil: none
 	Dim    func(string) string
@@ -203,6 +206,11 @@ func (c *Console) draw() string {
 	}
 	b.WriteString(prompt + string(buf[start:end]))
 	lines := c.menuLines(w)
+	if len(lines) == 0 && c.Footer != nil {
+		if f := c.Footer(); f != "" {
+			lines = []string{cutVisible(f, w-1)}
+		}
+	}
 	for _, l := range lines {
 		b.WriteString("\r\n" + l)
 	}

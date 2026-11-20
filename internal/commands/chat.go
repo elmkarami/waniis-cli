@@ -105,6 +105,7 @@ type chatSession struct {
 	noRepo       bool
 	ctrlC        int
 	promptStr    atomic.Pointer[string]
+	footerStr    atomic.Pointer[string]
 
 	people  *render.People // who is who: you, the others, never an id
 	own     *render.Own    // what this chat sent, so its echoes aren't shown twice
@@ -129,9 +130,14 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 	ca := *a
 	ca.g.JSON = false
 	sty := style.Style{On: a.colorOn()}
+	me, _ := rt.Client.Me(ctx)
+	selfID := ""
+	if me != nil {
+		selfID = me.ID
+	}
 	s := &chatSession{rt: rt, ctx: ctx, opts: o, sty: sty, ed: chat.NewEditor(), asked: map[string]bool{},
 		mode: o.Mode, model: o.Model, noRepo: o.NoRepo, st: sessionstate.New(),
-		people: render.NewPeople(a.selfID(ctx, rt), nil), own: render.NewOwn(a.Now), act: chat.NewActivity(a.Now),
+		people: render.NewPeople(selfID, nil), own: render.NewOwn(a.Now), act: chat.NewActivity(a.Now),
 		tried: map[string]time.Time{}, tickerStop: make(chan struct{})}
 	s.refreshPrompt()
 	raw := false
@@ -142,7 +148,7 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 			defer restore()
 		}
 	}
-	s.con = &chat.Console{Out: a.Out, Raw: raw, Width: a.termWidth, Ed: s.ed, Prompt: s.promptText, Bold: sty.Bold, Dim: sty.Dim,
+	s.con = &chat.Console{Out: a.Out, Raw: raw, Width: a.termWidth, Ed: s.ed, Prompt: s.promptText, Footer: s.footerText, Bold: sty.Bold, Dim: sty.Dim,
 		PickStyle: chat.PickStyle{Bold: sty.Bold, Dim: sty.Dim, Accent: sty.Cyan, Reverse: sty.Reverse}}
 	ca.Out, ca.Err = s.con, s.con
 	s.a = &ca
@@ -154,13 +160,12 @@ func (a *app) runChat(ctx context.Context, id string, o chatOptions) error {
 		go s.ticker()
 	}
 
+	s.welcome(me)
 	if id != "" {
 		if err := s.attach(id); err != nil {
 			s.con.Hide()
 			return err
 		}
-	} else {
-		s.say(sty.Bold("Waniis") + " " + sty.Dim("chat. Type your first message to start a session; / for commands, Ctrl-C twice to leave."))
 	}
 	if raw {
 		s.con.Redraw()
@@ -186,24 +191,24 @@ func (s *chatSession) promptText() string {
 	return "› "
 }
 
-// refreshPrompt recomputes the prompt from the mode, model and open question. Call with s.mu held.
+// footerText is read by the console while it holds its own lock, so it must not take s.mu.
+func (s *chatSession) footerText() string {
+	if f := s.footerStr.Load(); f != nil {
+		return *f
+	}
+	return ""
+}
+
+// refreshPrompt recomputes the prompt (an open question shows "?") and the line under the input
+// (the mode and the chosen model). Call with s.mu held.
 func (s *chatSession) refreshPrompt() {
 	p := "› "
 	if s.current != nil {
 		p = "? "
-	} else {
-		var parts []string
-		if s.mode != "" {
-			parts = append(parts, s.mode)
-		}
-		if s.model != "" {
-			parts = append(parts, s.model)
-		}
-		if len(parts) > 0 {
-			p = strings.Join(parts, " · ") + " › "
-		}
 	}
 	s.promptStr.Store(&p)
+	f := footerFor(s.sty, s.mode, s.model)
+	s.footerStr.Store(&f)
 }
 
 // say prints one line (or more) of the chat's own, closing any half-written answer first.
@@ -393,7 +398,12 @@ func (s *chatSession) rawLoop() error {
 				var res chat.Result
 				var line string
 				var picked func()
+				cycle := false
 				s.con.Edit(func() {
+					if k.Kind == chat.KeyBackTab && s.con.Pick == nil {
+						cycle = true
+						return
+					}
 					if p := s.con.Pick; p != nil {
 						// An open picker (/model) takes the keys until it is done.
 						if done, item := p.Handle(k); done {
@@ -410,6 +420,9 @@ func (s *chatSession) rawLoop() error {
 				if picked != nil {
 					s.con.Redraw()
 					picked()
+				}
+				if cycle {
+					s.cycleMode()
 				}
 				switch res {
 				case chat.Submit:

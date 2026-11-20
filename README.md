@@ -231,6 +231,10 @@ Waniis: I see "abcabc." If you're testing the chat, it's working—what can I he
 ✓ done · 3s
 ```
 
+The chat opens with the Waniis mark beside the version, the model, the workspace and the
+folder's repo, and a line under the input with the mode: **Shift+Tab** cycles auto, build, plan
+and ask.
+
 Type **`/`** to open the command menu: it filters as you type, **Up/Down** pick, **Tab** completes,
 **Enter** runs the highlighted command, **Esc** closes it. `/help` lists everything.
 

@@ -374,7 +374,11 @@ func TestBareWaniisOpensTheChatInATerminal(t *testing.T) {
 	c := &chatRun{}
 	_ = c
 	r := h.startChat(true)
-	r.waitFor(t, "chat. Type your first message")
+	r.waitFor(t, "shift+tab to cycle") // the welcome and the mode line under the input
+	r.send("\x1b[Z")                   // Shift+Tab: the next mode
+	r.waitFor(t, "build mode")
+	r.send("\x1b[Z\x1b[Z\x1b[Z") // plan, ask, back to auto
+	r.waitFor(t, "ask mode")
 	r.send("\x04")
 	eq(t, r.finish(t), 0, "exit")
 }

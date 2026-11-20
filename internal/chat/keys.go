@@ -11,6 +11,7 @@ const (
 	KeyBackspace
 	KeyDelete
 	KeyTab
+	KeyBackTab
 	KeyEsc
 	KeyUp
 	KeyDown
@@ -113,6 +114,8 @@ func escape(b []byte) (Key, int) {
 			return Key{Kind: KeyHome}, 3
 		case 'F':
 			return Key{Kind: KeyEnd}, 3
+		case 'Z':
+			return Key{Kind: KeyBackTab}, 3
 		}
 		if b[1] == '[' && b[2] >= '0' && b[2] <= '9' {
 			n := 3

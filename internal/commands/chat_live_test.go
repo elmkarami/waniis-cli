@@ -33,7 +33,13 @@ func (c *chatRun) waitScreen(t *testing.T, what string, check func(lines []strin
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		term := c.screen()
-		if lines := term.Lines(); check(lines, term) {
+		lines := term.Lines()
+		// The mode line under the input ("►► auto mode (shift+tab to cycle)") isn't what these
+		// checks are about: they look at what is above it, ending with the input.
+		if n := len(lines); n > 0 && strings.HasPrefix(lines[n-1], "►► ") {
+			lines = lines[:n-1]
+		}
+		if check(lines, term) {
 			return lines
 		}
 		time.Sleep(5 * time.Millisecond)
