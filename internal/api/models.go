@@ -34,12 +34,25 @@ type ModelRoute struct {
 	Fallbacks []string `json:"fallbacks"`
 }
 
+// Routing is the task router's settings: auto picks a tier per task, off uses the role routes.
+type Routing struct {
+	Mode string `json:"mode"`
+}
+
+// ModelChoice says whether people may choose a model; locked means the router always decides.
+type ModelChoice struct {
+	Overrides string `json:"overrides"`
+	Message   string `json:"message"`
+}
+
 // Models is the workspace's models view.
 type Models struct {
-	Providers []ModelProvider       `json:"providers"`
-	Models    []Model               `json:"models"`
-	Routes    map[string]ModelRoute `json:"routes"`
-	CanManage bool                  `json:"canManage"`
+	Routing     *Routing              `json:"routing"`
+	ModelChoice *ModelChoice          `json:"modelChoice"`
+	Providers   []ModelProvider       `json:"providers"`
+	Models      []Model               `json:"models"`
+	Routes      map[string]ModelRoute `json:"routes"`
+	CanManage   bool                  `json:"canManage"`
 }
 
 // Models is GET /v1/models.
@@ -49,6 +62,21 @@ func (c *Client) Models(ctx context.Context) (*Models, error) {
 		return nil, err
 	}
 	return &m, nil
+}
+
+// Routed says whether the task router picks each run's model.
+func (m *Models) Routed() bool { return m.Routing != nil && m.Routing.Mode == "auto" }
+
+// Locked says whether the workspace keeps the choice of model to its router, and why.
+func (m *Models) Locked() (bool, string) {
+	if m.ModelChoice == nil || m.ModelChoice.Overrides != "locked" {
+		return false, ""
+	}
+	msg := m.ModelChoice.Message
+	if msg == "" {
+		msg = "Your workspace's admins chose the models; the router picks one for each task."
+	}
+	return true, msg
 }
 
 // Default is the model prompts use when none is chosen: the agent role's.

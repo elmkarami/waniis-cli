@@ -4,6 +4,16 @@ What changed in each release of `waniis`. The newest is first. A release's notes
 its section here, so every version needs one before it can be released (the Release workflow
 checks).
 
+## v0.1.5 — 2026-11-20
+
+### Added
+
+- **The task router.** When the workspace's router picks the model for each task, the welcome
+  says "model chosen by task" and `waniis models` says so too.
+- **A workspace that keeps the choice of model to its router**: `/model` explains that the
+  workspace's admins chose the models instead of offering a picker, and no model is sent with
+  prompts. `waniis models --json` reports `routed` and `locked`.
+
 ## v0.1.4 — 2026-11-20
 
 ### Added

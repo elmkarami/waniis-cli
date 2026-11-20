@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/elmkarami/waniis-cli/internal/api"
@@ -48,7 +49,9 @@ func (a *app) modelsCmd() *cobra.Command {
 					}
 					rows = append(rows, row)
 				}
-				return output.JSON(a.Out, map[string]any{"default": nullable(m.Default()), "models": rows})
+				locked, _ := m.Locked()
+				return output.JSON(a.Out, map[string]any{"default": nullable(m.Default()), "routed": m.Routed(),
+					"locked": locked, "models": rows})
 			}
 			rows := make([][]string, 0, len(shown))
 			for _, model := range shown {
@@ -62,7 +65,16 @@ func (a *app) modelsCmd() *cobra.Command {
 				}
 				rows = append(rows, []string{name, model.Title, m.ProviderTitle(model.Provider), strings.TrimSpace(model.Tier), status})
 			}
-			return output.Table(a.Out, []string{"MODEL", "NAME", "PROVIDER", "TIER", "STATUS"}, rows)
+			if err := output.Table(a.Out, []string{"MODEL", "NAME", "PROVIDER", "TIER", "STATUS"}, rows); err != nil {
+				return err
+			}
+			if m.Routed() {
+				fmt.Fprintln(a.Out, "\nThe router picks a model for each task (fast, standard or strong).")
+			}
+			if locked, why := m.Locked(); locked {
+				fmt.Fprintln(a.Out, why)
+			}
+			return nil
 		},
 	}
 	fl := c.Flags()

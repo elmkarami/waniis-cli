@@ -120,12 +120,20 @@ func (s *chatSession) welcome(me *api.Me) {
 	defer cancel()
 	if m, err := s.rt.Client.Models(ctx); err == nil {
 		ref := s.model
-		if ref == "" {
-			ref = m.Default()
+		if locked, _ := m.Locked(); locked {
+			ref = ""
 		}
-		f.Model = titleOf(m, ref)
-		if f.Model == "its default" {
-			f.Model = ""
+		switch {
+		case ref == "" && m.Routed():
+			f.Model = "model chosen by task"
+		default:
+			if ref == "" {
+				ref = m.Default()
+			}
+			f.Model = titleOf(m, ref)
+			if f.Model == "its default" {
+				f.Model = ""
+			}
 		}
 	}
 	if s.a.notifierOn("chat") {

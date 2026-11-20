@@ -72,6 +72,11 @@ func (s *chatSession) chooseModel(arg string) {
 		s.report(err, "")
 		return
 	}
+	if locked, why := m.Locked(); locked {
+		// The router decides; a model chosen here would be refused when the prompt is sent.
+		s.setModel("", why)
+		return
+	}
 	switch strings.ToLower(arg) {
 	case "":
 		s.pickModel(m)
