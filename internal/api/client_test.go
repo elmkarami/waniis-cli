@@ -137,14 +137,14 @@ func TestHeadersAndRedaction(t *testing.T) {
 	defer srv.Close()
 	var sleeps []time.Duration
 	c := testClient(srv, &sleeps)
-	c.Tokens = staticTokens{"rafiiq_pat_secret123"}
+	c.Tokens = staticTokens{"waniis_pat_secret123"}
 	c.Workspace = "ws_9"
 	var log bytes.Buffer
 	c.Log = &log
 	if _, err := c.Do(context.Background(), Request{Method: "GET", Path: "/v1/me"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got.Get("Authorization") != "Bearer rafiiq_pat_secret123" || got.Get("x-rafiiq-workspace") != "ws_9" || got.Get("User-Agent") != "test" {
+	if got.Get("Authorization") != "Bearer waniis_pat_secret123" || got.Get("x-rafiiq-workspace") != "ws_9" || got.Get("User-Agent") != "test" {
 		t.Fatalf("headers: %v", got)
 	}
 	if strings.Contains(log.String(), "secret123") {
@@ -156,7 +156,7 @@ func TestHeadersAndRedaction(t *testing.T) {
 }
 
 func TestRedact(t *testing.T) {
-	in := "GET /x?token=rafiiq_cli_AbC-123_x and rafiiq_pat_zzz"
+	in := "GET /x?token=waniis_cli_AbC-123_x and waniis_pat_zzz"
 	out := Redact(in)
 	if strings.Contains(out, "AbC") || strings.Contains(out, "zzz") {
 		t.Fatalf("not redacted: %s", out)

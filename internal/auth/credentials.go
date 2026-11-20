@@ -9,15 +9,15 @@ import (
 
 // Token kinds, from the token prefixes (DEC-152).
 const (
-	KindPersonal = "pat" // rafiiq_pat_…: a personal API token
-	KindGrant    = "cli" // rafiiq_cli_…: a device-flow access token
+	KindPersonal = "pat" // waniis_pat_…: a personal API token
+	KindGrant    = "cli" // waniis_cli_…: a device-flow access token
 	KindEnv      = "env" // WANIIS_TOKEN, never stored
 )
 
 // Prefixes of the two token kinds.
 const (
-	PrefixPersonal = "rafiiq_pat_"
-	PrefixGrant    = "rafiiq_cli_"
+	PrefixPersonal = "waniis_pat_"
+	PrefixGrant    = "waniis_cli_"
 )
 
 // Credentials is what is stored for one host. It never leaves the credential store except as an

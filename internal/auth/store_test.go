@@ -11,7 +11,7 @@ import (
 )
 
 func sample(host string) *Credentials {
-	return &Credentials{Host: host, Token: "rafiiq_pat_x", Kind: KindPersonal, Login: "maya"}
+	return &Credentials{Host: host, Token: "waniis_pat_x", Kind: KindPersonal, Login: "maya"}
 }
 
 func TestFileStoreIs0600AndRoundTrips(t *testing.T) {
@@ -68,7 +68,7 @@ func TestKeyringStoreRoundTripsUnderServiceWaniis(t *testing.T) {
 		t.Fatalf("expected an entry under service waniis: %v", err)
 	}
 	c, _ := ks.Load("h")
-	if c == nil || c.Token != "rafiiq_pat_x" {
+	if c == nil || c.Token != "waniis_pat_x" {
 		t.Fatalf("%+v", c)
 	}
 	if err := ks.Delete("h"); err != nil {
@@ -120,7 +120,7 @@ func TestChainStorePrefersKeychainAndRemovesOldFile(t *testing.T) {
 }
 
 func TestKindOf(t *testing.T) {
-	if KindOf("rafiiq_cli_abc") != KindGrant || KindOf("rafiiq_pat_abc") != KindPersonal {
+	if KindOf("waniis_cli_abc") != KindGrant || KindOf("waniis_pat_abc") != KindPersonal {
 		t.Fatal("kinds")
 	}
 }

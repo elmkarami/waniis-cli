@@ -28,10 +28,10 @@ const (
 )
 
 // tokenPattern matches Waniis token values (personal and CLI-grant prefixes) for log redaction.
-var tokenPattern = regexp.MustCompile(`rafiiq_(?:pat|cli)_[A-Za-z0-9_\-]+`)
+var tokenPattern = regexp.MustCompile(`waniis_(?:pat|cli|ref)_[A-Za-z0-9_\-]+`)
 
 // Redact removes anything that looks like a token from s.
-func Redact(s string) string { return tokenPattern.ReplaceAllString(s, "rafiiq_***") }
+func Redact(s string) string { return tokenPattern.ReplaceAllString(s, "waniis_***") }
 
 // TokenSource supplies the bearer token for a request. Refresh is called once after a 401 and
 // returns a new token when the credential can be renewed.

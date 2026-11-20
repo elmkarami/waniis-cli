@@ -49,7 +49,7 @@ type DeviceFlow struct {
 
 // Start asks for a device code.
 func (d *DeviceFlow) Start(ctx context.Context, deviceName, scope string) (*DeviceCode, error) {
-	body := map[string]string{"client_id": ClientID, "device_name": deviceName}
+	body := map[string]string{"client_id": ClientID, "client_name": deviceName, "device_name": deviceName}
 	if scope != "" {
 		body["scope"] = scope
 	}

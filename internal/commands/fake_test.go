@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	testPAT    = "rafiiq_pat_abcdef123456"
-	testAccess = "rafiiq_cli_access123456"
-	testRef    = "rafiiq_cli_refresh123456"
+	testPAT    = "waniis_pat_abcdef123456"
+	testAccess = "waniis_cli_access123456"
+	testRef    = "waniis_cli_refresh123456"
 )
 
 // recorded is one request the fake server saw.
@@ -139,9 +139,9 @@ func (f *fake) handle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			f.mu.Lock()
-			f.validToken = "rafiiq_cli_rotated"
+			f.validToken = "waniis_cli_rotated"
 			f.mu.Unlock()
-			writeJSON(w, 200, map[string]any{"access_token": "rafiiq_cli_rotated", "refresh_token": "rafiiq_cli_refresh_rotated", "token_type": "Bearer", "expires_in": 3600})
+			writeJSON(w, 200, map[string]any{"access_token": "waniis_cli_rotated", "refresh_token": "waniis_cli_refresh_rotated", "token_type": "Bearer", "expires_in": 3600})
 			return
 		}
 		step := "ok"

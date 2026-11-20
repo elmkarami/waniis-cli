@@ -33,7 +33,7 @@ func TestLoginDeviceFlow(t *testing.T) {
 	notContains(t, out+errOut, testRef)
 	body := h.f.last("POST", "/auth/device/code").Body
 	eq(t, body["client_id"], any("waniis-cli"), "client id")
-	eq(t, body["device_name"], any("CLI on maya-mbp"), "device name")
+	eq(t, body["client_name"], any("CLI on maya-mbp"), "device name")
 	eq(t, h.f.last("POST", "/auth/device/token").Body["grant_type"], any("urn:ietf:params:oauth:grant-type:device_code"), "grant type")
 }
 
@@ -96,7 +96,7 @@ func TestLoginWithTokenFlagAndStdinAndEnv(t *testing.T) {
 
 func TestLoginWithBadTokenIsNotStored(t *testing.T) {
 	h := newHarness(t)
-	code, _, errOut := h.run("login", "--token", "rafiiq_pat_wrong")
+	code, _, errOut := h.run("login", "--token", "waniis_pat_wrong")
 	eq(t, code, 3, "exit code")
 	contains(t, errOut, "waniis login")
 	if c, _ := h.store.Load(h.f.srv.URL); c != nil {
@@ -167,7 +167,7 @@ func TestWhoamiNotSignedIn(t *testing.T) {
 
 func TestEnvTokenOverridesStoredCredential(t *testing.T) {
 	h := newHarness(t)
-	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "rafiiq_pat_stale", Kind: auth.KindPersonal})
+	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "waniis_pat_stale", Kind: auth.KindPersonal})
 	h.env["WANIIS_TOKEN"] = testPAT
 	code, out, _ := h.run("whoami")
 	eq(t, code, 0, "exit code")
@@ -176,22 +176,22 @@ func TestEnvTokenOverridesStoredCredential(t *testing.T) {
 
 func TestExpiredGrantIsRefreshedAndRotated(t *testing.T) {
 	h := newHarness(t)
-	h.f.validToken = "rafiiq_cli_old" // the API will accept the rotated token only after refresh
-	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "rafiiq_cli_old", RefreshToken: testRef, Kind: auth.KindGrant,
+	h.f.validToken = "waniis_cli_old" // the API will accept the rotated token only after refresh
+	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "waniis_cli_old", RefreshToken: testRef, Kind: auth.KindGrant,
 		ExpiresAt: h.now.Add(30 * time.Second), Login: "maya"})
 	code, _, _ := h.run("whoami")
 	eq(t, code, 0, "exit code")
 	c, _ := h.store.Load(h.f.srv.URL)
-	eq(t, c.Token, "rafiiq_cli_rotated", "token rotated")
-	eq(t, c.RefreshToken, "rafiiq_cli_refresh_rotated", "refresh token rotated")
+	eq(t, c.Token, "waniis_cli_rotated", "token rotated")
+	eq(t, c.RefreshToken, "waniis_cli_refresh_rotated", "refresh token rotated")
 	eq(t, c.Login, "maya", "identity kept")
 }
 
 func TestUnauthorizedTriggersOneRefresh(t *testing.T) {
 	h := newHarness(t)
-	h.f.validToken = "rafiiq_cli_something_else"
+	h.f.validToken = "waniis_cli_something_else"
 	// A reused or revoked refresh token: the server refuses it, the CLI doesn't loop.
-	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "rafiiq_cli_revoked", RefreshToken: "rafiiq_cli_bad", Kind: auth.KindGrant,
+	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "waniis_cli_revoked", RefreshToken: "waniis_cli_bad", Kind: auth.KindGrant,
 		ExpiresAt: h.now.Add(time.Hour)})
 	code, _, errOut := h.run("whoami")
 	eq(t, code, 3, "exit code")
@@ -202,8 +202,8 @@ func TestUnauthorizedTriggersOneRefresh(t *testing.T) {
 
 func TestUnauthorizedRefreshesAndRetriesOnce(t *testing.T) {
 	h := newHarness(t)
-	h.f.validToken = "rafiiq_cli_rotated" // what the server accepts after the refresh
-	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "rafiiq_cli_revoked", RefreshToken: testRef, Kind: auth.KindGrant,
+	h.f.validToken = "waniis_cli_rotated" // what the server accepts after the refresh
+	_ = h.store.Save(&auth.Credentials{Host: h.f.srv.URL, Token: "waniis_cli_revoked", RefreshToken: testRef, Kind: auth.KindGrant,
 		ExpiresAt: h.now.Add(time.Hour)})
 	code, _, _ := h.run("whoami")
 	eq(t, code, 0, "exit code")

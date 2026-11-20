@@ -4,7 +4,7 @@ What the CLI sends and reads, endpoint by endpoint, and where the spec (CLT-15, 
 silent so a convention was chosen. **Rows marked "assumed" are the ones to reconcile with the
 server.** The fake server in `internal/commands/fake_test.go` implements exactly this contract.
 
-Bearer tokens: `Authorization: Bearer rafiiq_pat_…` (personal) or `rafiiq_cli_…` (device grant).
+Bearer tokens: `Authorization: Bearer waniis_pat_…` (personal) or `waniis_cli_…` (device grant).
 Every `/v1` request also sends `x-rafiiq-workspace` when `--workspace` / `WANIIS_WORKSPACE` is set,
 and `User-Agent: waniis-cli/<version> (<os>; <arch>)`. Requests and responses are JSON.
 

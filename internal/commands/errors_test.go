@@ -136,7 +136,7 @@ func TestNoTokenInAnyOutput(t *testing.T) {
 		_, o, e := h.run(args...)
 		all += o + e
 	}
-	for _, tok := range []string{testPAT, "rafiiq_pat_", "rafiiq_cli_"} {
+	for _, tok := range []string{testPAT, "waniis_pat_", "waniis_cli_"} {
 		notContains(t, all, tok)
 	}
 }
