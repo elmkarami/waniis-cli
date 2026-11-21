@@ -13,7 +13,7 @@ checks).
   the pull request for them (it still shows the one already open), and
   `waniis sessions pr <id>...` does the same from a script. Asking in the prompt ("…and open a
   PR") still works.
-- `waniis sessions show` and `/status` list the kept changes and whether they are ready.
+- `waniis sessions status` and `/status` list the kept changes and whether they are ready.
 
 ## v0.1.5 — 2026-11-20
 
