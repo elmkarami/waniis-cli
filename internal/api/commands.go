@@ -103,6 +103,16 @@ type PRStatus struct {
 	State  string `json:"state,omitempty"` // only in what the CLI derives itself
 }
 
+// KeptStatus is what a run changed but didn't publish. Ready: the run succeeded and the changes
+// wait for someone to open a pull request.
+type KeptStatus struct {
+	RunID     string `json:"runId"`
+	Files     int    `json:"files"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Ready     bool   `json:"ready"`
+}
+
 // SandboxStatus is the sandbox's state.
 type SandboxStatus struct {
 	Status string `json:"status"`
@@ -127,6 +137,7 @@ type Status struct {
 	Queued      int            `json:"queued"`
 	LastRun     *OutcomeStatus `json:"lastRun"`
 	PullRequest *PRStatus      `json:"pullRequest"`
+	KeptChanges *KeptStatus    `json:"keptChanges"`
 	Sandbox     *SandboxStatus `json:"sandbox"`
 	LastSeq     int            `json:"lastSeq"`
 	At          string         `json:"at,omitempty"`

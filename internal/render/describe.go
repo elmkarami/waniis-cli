@@ -109,6 +109,9 @@ func (r *Renderer) describe(ev api.Event, p map[string]any) string {
 	case "session.continued_in":
 		return st.Dim("● continued in a new session")
 	case "changes.kept":
+		if ready, _ := p["ready"].(bool); ready {
+			return st.Green(fmt.Sprintf("✓ changes ready: %s, +%d −%d", plural(num(p, "files"), "file", "files"), num(p, "additions"), num(p, "deletions"))) + st.Dim(" · /pr opens a pull request")
+		}
 		return st.Dim(fmt.Sprintf("◦ changes kept, not published: %s, +%d −%d", plural(num(p, "files"), "file", "files"), num(p, "additions"), num(p, "deletions")))
 	case "changes.publish_requested":
 		return st.Dim("◦ publish requested by " + r.name(s("requestedBy")))

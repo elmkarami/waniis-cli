@@ -402,6 +402,16 @@ func TestStopMany(t *testing.T) {
 	}
 }
 
+func TestSessionsPROpensPullRequestForKeptChanges(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	code, out, _ := h.run("sessions", "pr", "ses_a")
+	eq(t, code, 0, "exit code")
+	contains(t, out, "asked to open a pull request")
+	r := h.f.last("POST", "/v1/sessions/ses_a/commands")
+	eq(t, r.Body["type"], any("changes.publish"), "command type")
+}
+
 func TestStopPartialFailureExits9(t *testing.T) {
 	h := newHarness(t)
 	h.signIn()

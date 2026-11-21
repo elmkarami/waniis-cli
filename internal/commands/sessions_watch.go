@@ -238,6 +238,13 @@ func (a *app) writeStatus(rt *conn, id string, st *api.Status) error {
 			pr += " (draft)"
 		}
 	}
+	kept := "-"
+	if k := st.KeptChanges; k != nil {
+		kept = fmt.Sprintf("%s, +%d −%d", plural(k.Files, "file", "files"), k.Additions, k.Deletions)
+		if k.Ready {
+			kept += " (ready: `waniis sessions pr " + id + "` opens a pull request)"
+		}
+	}
 	sandbox := "-"
 	if st.Sandbox != nil {
 		sandbox = st.Sandbox.Status
@@ -248,6 +255,7 @@ func (a *app) writeStatus(rt *conn, id string, st *api.Status) error {
 	return output.KeyValues(a.Out, [][2]string{
 		{"Session", id}, {"Activity", orDash(st.Activity)}, {"Stage", orDash(st.Stage)}, {"Run", run},
 		{"Queued prompts", fmt.Sprint(st.Queued)}, {"Last run", last}, {"Pull request", pr},
+		{"Kept changes", kept},
 		{"Sandbox", sandbox}, {"URL", sessionURL(rt.Base, id)},
 	})
 }

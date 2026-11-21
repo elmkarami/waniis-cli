@@ -1189,7 +1189,7 @@ func (s *chatSession) pr(id string) {
 		}
 	}
 	if len(prs) == 0 {
-		s.dim("No pull request yet.")
+		s.openPR(id)
 		return
 	}
 	for _, p := range prs {
@@ -1198,6 +1198,25 @@ func (s *chatSession) pr(id string) {
 	if s.a.OpenBrowser != nil && s.a.OpenBrowser(prs[0].URL) == nil {
 		s.dim("Opened it in your browser.")
 	}
+}
+
+// openPR asks for a pull request for the changes the last run kept: runs open one only when
+// someone asks (DEC-169), so their verified changes wait in the session.
+func (s *chatSession) openPR(id string) {
+	if id == "" {
+		s.dim("No pull request yet.")
+		return
+	}
+	st, _, err := s.a.fetchStatus(s.ctx, s.rt, id)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	if st.KeptChanges == nil {
+		s.dim("No pull request yet, and no changes waiting for one.")
+		return
+	}
+	s.report(s.rt.Client.PublishChanges(s.ctx, id), "Opening a pull request for the kept changes…")
 }
 
 func (s *chatSession) preview(id string) {

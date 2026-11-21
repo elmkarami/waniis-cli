@@ -254,6 +254,14 @@ func (c *Client) StopRun(ctx context.Context, id string) error {
 	return err
 }
 
+// PublishChanges is the changes.publish command: it opens a pull request for the changes a run
+// kept (DEC-169: a run opens one only when someone asks).
+func (c *Client) PublishChanges(ctx context.Context, id string) error {
+	body := map[string]any{"type": "changes.publish"}
+	_, err := c.Do(ctx, Request{Method: http.MethodPost, Path: "/v1/sessions/" + url.PathEscape(id) + "/commands", Body: body, Idempotent: true}, nil)
+	return err
+}
+
 // Actor says who caused an event.
 type Actor struct {
 	Kind      string `json:"kind"`

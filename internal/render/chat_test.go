@@ -261,3 +261,14 @@ func TestEveryGoldenIsFreeOfIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestReadyChangesSayHowToOpenAPullRequest(t *testing.T) {
+	ready := run(Options{}, ev(1, "changes.kept", m{"runId": "run_1", "files": 2, "additions": 5, "deletions": 1, "ready": true}))
+	if !strings.Contains(ready, "changes ready: 2 files, +5 −1") || !strings.Contains(ready, "/pr opens a pull request") {
+		t.Fatalf("ready changes: %q", ready)
+	}
+	kept := run(Options{}, ev(2, "changes.kept", m{"runId": "run_1", "files": 1, "additions": 1, "deletions": 0}))
+	if !strings.Contains(kept, "changes kept, not published") || strings.Contains(kept, "/pr") {
+		t.Fatalf("kept changes: %q", kept)
+	}
+}

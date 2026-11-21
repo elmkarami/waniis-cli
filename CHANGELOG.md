@@ -4,6 +4,17 @@ What changed in each release of `waniis`. The newest is first. A release's notes
 its section here, so every version needs one before it can be released (the Release workflow
 checks).
 
+## v0.1.6 — 2026-11-21
+
+### Added
+
+- **Pull requests when you ask for one.** Waniis no longer opens a pull request after every
+  change: a run keeps its verified changes, ready. The chat shows "✓ changes ready", `/pr` opens
+  the pull request for them (it still shows the one already open), and
+  `waniis sessions pr <id>...` does the same from a script. Asking in the prompt ("…and open a
+  PR") still works.
+- `waniis sessions show` and `/status` list the kept changes and whether they are ready.
+
 ## v0.1.5 — 2026-11-20
 
 ### Added

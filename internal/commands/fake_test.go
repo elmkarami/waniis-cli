@@ -304,7 +304,7 @@ func (f *fake) sessionRoute(w http.ResponseWriter, r *http.Request, body map[str
 		}
 		writeJSON(w, 200, map[string]any{"events": out})
 	case r.Method == "POST" && sub == "commands":
-		if body["type"] != "run.stop" {
+		if body["type"] != "run.stop" && body["type"] != "changes.publish" {
 			writeJSON(w, 400, map[string]any{"error": "invalid_command"})
 			return
 		}

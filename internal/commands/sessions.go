@@ -29,7 +29,7 @@ func (a *app) sessionsCmd() *cobra.Command {
 		Aliases: []string{"s", "session"},
 		Short:   "Start, list, search, stop, share and open sessions",
 	}
-	c.AddCommand(a.sessionsListCmd(), a.sessionsShowCmd(), a.sessionsStartCmd(), a.sessionsStopCmd(),
+	c.AddCommand(a.sessionsListCmd(), a.sessionsShowCmd(), a.sessionsStartCmd(), a.sessionsStopCmd(), a.sessionsPRCmd(),
 		a.sessionsSearchCmd(), a.sessionsShareCmd(), a.sessionsOpenCmd(),
 		a.sessionsLogsCmd(), a.sessionsStatusCmd(), a.sessionsPromptCmd(), a.sessionsSteerCmd(), a.sessionsWaitCmd())
 	return c
@@ -634,6 +634,30 @@ and the exit code is 9 when only some of them could be stopped.`,
 			}
 			results := a.runBulk(cmd.Context(), ids, rt.Client.StopRun)
 			return a.reportBulk(results, "stopped")
+		},
+	}
+}
+
+func (a *app) sessionsPRCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pr <id>...",
+		Short: "Open a pull request for the changes a session kept",
+		Long: `A run opens a pull request only when someone asks for one; otherwise its verified changes are
+kept in the session, ready. This opens the pull request for them, as "Open pull request" does in
+the web app. Give several ids, or "-" to read ids from stdin, one per line.`,
+		Example: "  waniis sessions pr ses_01abc",
+		Args:    cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ids, err := a.collectIDs(args)
+			if err != nil {
+				return err
+			}
+			rt, err := a.newClient(true)
+			if err != nil {
+				return err
+			}
+			results := a.runBulk(cmd.Context(), ids, rt.Client.PublishChanges)
+			return a.reportBulk(results, "asked to open a pull request")
 		},
 	}
 }

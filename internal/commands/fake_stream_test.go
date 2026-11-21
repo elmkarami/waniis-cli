@@ -240,7 +240,7 @@ func (f *fake) serveCommand(w http.ResponseWriter, r *http.Request, id string, b
 			return
 		}
 		reply = map[string]any{"runId": "run_7", "events": []any{}}
-	case "run.stop", "tool.approval.decide", "session.start_working":
+	case "run.stop", "tool.approval.decide", "session.start_working", "changes.publish":
 		reply = map[string]any{"events": []any{}}
 	default:
 		writeJSON(w, 400, map[string]any{"error": "invalid_command"})

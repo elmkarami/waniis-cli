@@ -24,7 +24,7 @@ var Commands = []Command{
 	{Name: "queue", Desc: "Show the prompts waiting behind the run"},
 	{Name: "logs", Args: "[N]", Desc: "Show the last N events (default 30)"},
 	{Name: "diff", Desc: "What the session changed, per repo"},
-	{Name: "pr", Desc: "Show and open the pull request"},
+	{Name: "pr", Desc: "Show the pull request, or open one for the kept changes"},
 	{Name: "preview", Desc: "Print preview links (one-time, 60 seconds)"},
 	{Name: "open", Desc: "Open the session in the browser"},
 	{Name: "share", Args: "[viewer|collaborator]", Desc: "Turn on a share link and print it"},
